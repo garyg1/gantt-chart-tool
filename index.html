@@ -5,6 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gantt Chart Maker</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+    </style>
 </head>
 
 <body style="margin: 0;">
@@ -15,6 +20,10 @@
         <div style="text-align: center; flex: 1">
             <div id="container" style="display: inline-block; margin: 0 auto;"></div>
         </div>
+        <p style="position: fixed; right: 0; bottom: 0; text-align: right; padding: 10px; color: grey">
+            <small>&copy; 2023 Gary Gurlaskie</small><br/>
+            <small>Gantt Chart Maker v2023.12.21.1</small>
+        </p>
     </div>
     <script src="./d3.v7.min.js"></script>
     <script src="monaco-editor/min/vs/loader.js"></script>
