@@ -92,6 +92,10 @@ function addDays(date, days) {
     return ret;
 }
 
+function diffDays(date1, date2) {
+    return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
+}
+
 function assertTimelineValid(timeline) {
     for (const task of timeline.tasks) {
         if (task.interval.start > task.interval.end) {
@@ -104,46 +108,81 @@ function assertTimelineValid(timeline) {
     }
 }
 
-function renderTimeline(timeline) {
-    assertTimelineValid(timeline);
-    const maxSwimlaneLabelLength = timeline.swimlanes.reduce((max, curr) => Math.max(curr.name.length, max), 0);
+const d3Font = 'sans-serif';
+const measureText = ((() => {
+    var canvas = document.createElement('canvas'),
+        context = canvas.getContext('2d');
+
+    return function measureText(text, fontSize) {
+        context.font = fontSize + 'px ' + d3Font;
+        return context.measureText(text).width;
+    }
+})());
+
+function renderTimeline(rawTimeline) {
+    assertTimelineValid(rawTimeline);
+
+    const timeline = {
+        ...rawTimeline,
+        tasks: rawTimeline.tasks
+            .slice()
+            .sort((a, b) => {
+                const intervalStartCmp = a.interval.start.localeCompare(b.interval.start);
+                return intervalStartCmp;
+            }).map(t => ({
+                ...t,
+                interval: {
+                    start: new Date(t.interval.start),
+                    end: new Date(t.interval.end),
+                }
+            })),
+    };
+
+    const datePaddingPercent = 0.2;
+    const minDateStrict = timeline.tasks
+        .map(task => task.interval.start)
+        .reduce((min, curr) => (!min || curr < min) ? curr : min);
+    const maxDateStrict = timeline.tasks
+        .map(task => task.interval.end)
+        .reduce((max, curr) => (!max || curr > max) ? curr : max);
+    const datePaddingDays = Math.ceil(diffDays(minDateStrict, maxDateStrict) * datePaddingPercent);
+
+    const minDate = addDays(minDateStrict, -datePaddingDays);
+    const maxDate = addDays(maxDateStrict, datePaddingDays);
+
     const width = 800;
-    const marginRight = 100;
-    const marginBottom = 30;
-    const datePaddingDays = 5;
-    const marginLeft = Math.max(100, maxSwimlaneLabelLength * 8);
+    const textSize = 12;
+    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce((max, curr) => Math.max(measureText(curr.name, textSize), max), 0);
+    const textPadding = 6;
+    const labelPadding = 12;
+    const marginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
+    let maxTaskLabelOverflowRight = 0;
+
+    // fixed point iteration for self-referential calculation
+    const numIters = 5;
+    for (let iter = 0; iter < numIters; iter++) {
+        maxTaskLabelOverflowRight = timeline.tasks.map((curr) => {
+            const mainSectionSize = width - marginLeft - maxTaskLabelOverflowRight;
+            const percent = (maxDate - curr.interval.end) / (maxDate - minDate);
+            const rightEdge = percent * mainSectionSize;
+
+            return measureText(curr.name, textSize) + textPadding - rightEdge + 2;
+        }).reduce((max, curr) => curr > max ? curr : max, 0);
+    }
+
+    const marginRight = maxTaskLabelOverflowRight;
     const taskHeight = 15;
     const taskPadding = 5;
-    const textPadding = 6;
     const textColor = "black"
     const swimlanePadding = 5;
-    const textSize = 12;
     const titleTextSize = 16;
     const titlePaddingTop = 8;
     const titlePaddingBottom = 18;
     const marginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
-    const height = marginTop
+    const spacingTop = 5;
+    const height = marginTop + spacingTop
         + timeline.tasks.length * (taskHeight + taskPadding)
         + timeline.swimlanes.length * swimlanePadding;
-
-    timeline = {
-        ...timeline,
-        tasks: timeline.tasks.slice().sort((a, b) => {
-            const intervalStartCmp = a.interval.start.localeCompare(b.interval.start);
-            return intervalStartCmp;
-        }),
-    };
-
-    const minDate = addDays(
-        timeline.tasks
-            .map(task => task.interval.start)
-            .reduce((min, curr) => (!min || curr < min) ? curr : min),
-        -datePaddingDays);
-    const maxDate = addDays(
-        timeline.tasks
-            .map(task => task.interval.end)
-            .reduce((max, curr) => (!max || curr > max) ? curr : max),
-        datePaddingDays);
 
     let cumulativeTaskIndex = 0
     const perSwimlaneTasks = timeline.swimlanes.map((swimlane, swimlaneIndex) => {
@@ -170,7 +209,7 @@ function renderTimeline(timeline) {
 
     // Declare the x (horizontal position) scale.
     const x = d3.scaleUtc()
-        .domain([new Date(minDate), new Date(maxDate)])
+        .domain([minDate, maxDate])
         .range([marginLeft, width - marginRight])
 
     // Create the SVG container.
@@ -206,13 +245,13 @@ function renderTimeline(timeline) {
             .data(tasks)
             .enter()
             .append("rect")
-            .attr("x", d => x(new Date(d.interval.start)))
+            .attr("x", d => x(d.interval.start))
             .attr("y", d => {
-                return marginTop + 5
+                return marginTop + spacingTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
                     + swimlanePadding * d.swimlaneIndex;
             })
-            .attr("width", d => x(new Date(d.interval.end)) - x(new Date(d.interval.start)))
+            .attr("width", d => x(d.interval.end) - x(d.interval.start))
             .attr("height", d => taskHeight)
             .attr("fill", d => d.swimlane.color)
 
@@ -220,14 +259,15 @@ function renderTimeline(timeline) {
             .data(tasks)
             .enter()
             .append("text")
-            .attr("x", d => x(new Date(d.interval.end)) + textPadding)
+            .attr("x", d => x(d.interval.end) + textPadding)
             .attr("y", d => {
-                return marginTop + 5
+                return marginTop + spacingTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
                     + swimlanePadding * d.swimlaneIndex;
             })
             .attr("dy", d => textSize)
             .attr("font-size", textSize)
+            .attr("text-anchor", "left")
             .attr("height", d => taskHeight)
             .attr("fill", textColor)
             .text(d => d.name)
@@ -239,7 +279,7 @@ function renderTimeline(timeline) {
         .append("rect")
         .attr("x", 0)
         .attr("y", d => {
-            return marginTop + 5
+            return marginTop + spacingTop
                 + (taskHeight + taskPadding) * d.taskIndexOverall
                 + swimlanePadding * d.swimlaneIndex;
         })
@@ -254,7 +294,7 @@ function renderTimeline(timeline) {
         .text(d => d.name)
         .attr("x", marginLeft / 2 - 2)
         .attr("y", d => {
-            return marginTop + 5
+            return marginTop + spacingTop
                 + (taskHeight + taskPadding) * d.taskIndexOverall
                 + swimlanePadding * d.swimlaneIndex;
         })
