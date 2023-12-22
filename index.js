@@ -166,7 +166,9 @@ function renderTimeline(rawTimeline) {
             const percent = (maxDate - curr.interval.end) / (maxDate - minDate);
             const rightEdge = percent * mainSectionSize;
 
-            return measureText(curr.name, textSize) + textPadding - rightEdge + 2;
+            return measureText(curr.name, textSize) + textPadding
+                - rightEdge
+                + 2 // fex extra pixels just to be safe
         }).reduce((max, curr) => curr > max ? curr : max, 0);
     }
 
