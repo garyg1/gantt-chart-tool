@@ -22,7 +22,6 @@ var timeline = {
     ],
     tasks: [
         {
-            id: '1',
             name: 'Create Widgets',
             interval: {
                 start: '2023-10-01',
@@ -31,7 +30,6 @@ var timeline = {
             swimlaneId: '1',
         },
         {
-            id: '2',
             name: 'Implement Widget Factory',
             interval: {
                 start: '2023-10-10',
@@ -40,7 +38,6 @@ var timeline = {
             swimlaneId: '1',
         },
         {
-            id: '3',
             name: 'Refactor Widget Manager Factory',
             interval: {
                 start: '2023-09-27',
@@ -49,7 +46,6 @@ var timeline = {
             swimlaneId: '1',
         },
         {
-            id: '4',
             name: 'Attend meetings',
             interval: {
                 start: '2023-10-02',
@@ -58,7 +54,6 @@ var timeline = {
             swimlaneId: '2',
         },
         {
-            id: '5',
             name: 'Wait for other people',
             interval: {
                 start: '2023-09-28',
