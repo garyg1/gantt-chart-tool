@@ -90,23 +90,6 @@ var timeline = {
     ]
 }
 
-require.config({ paths: { vs: 'monaco-editor/min/vs' } });
-var editor1;
-require(['vs/editor/editor.main'], function () {
-    const editor = monaco.editor.create(monacoContainer, {
-        value: JSON.stringify(timeline, null, 2),
-        language: 'json',
-        minimap: { enabled: false },
-    });
-    editor1 = editor;
-
-    editor.getModel().onDidChangeContent(() => {
-        const json = editor.getModel().createSnapshot().read();
-        timeline = JSON.parse(json);
-        rerender();
-    });
-});
-
 function addDays(date, days) {
     const ret = new Date(date);
     ret.setDate(ret.getDate() + days);
@@ -193,34 +176,47 @@ function renderTimeline(rawTimeline) {
         config: rawTimeline.config || {},
     };
 
-    const datePaddingPercent = 0.2;
-    const minDateStrict = timeline.tasks
-        .map(task => task.interval.start)
-        .reduce((min, curr) => (!min || curr < min) ? curr : min);
-    const maxDateStrict = timeline.tasks
-        .map(task => task.interval.end)
-        .reduce((max, curr) => (!max || curr > max) ? curr : max);
-    const datePaddingDays = Math.ceil(diffDays(minDateStrict, maxDateStrict) * datePaddingPercent);
-
-    const minDate = addDays(minDateStrict, -datePaddingDays);
-    const maxDate = addDays(maxDateStrict, datePaddingDays);
-
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
     const textSize = 12;
-    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce((max, curr) => Math.max(measureText(curr.name, textSize), max), 0);
     const textPadding = 6;
     const labelPadding = 12;
     const dateRangePadding = 6;
-    const marginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
-    let maxTaskLabelOverflowRight = 0;
+    const taskHeight = 15;
+    const taskPadding = 5;
+    const taskLabelTextColor = "#000";
+    const swimlaneLabelTextColor = "#fff";
+    const taskDateLabelTextColor = "#666";
+    const swimlanePadding = 5;
+    const titleTextSize = timeline.title ? 16 : 0;
+    const titlePaddingTop = timeline.title ? 8 : 0;
+    const titlePaddingBottom = timeline.title ? 18 : 0;
+    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce((max, curr) => Math.max(measureText(curr.name, textSize), max), 0);
+    const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
+    const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
+    const scaleMarginTop = 5;
+    const height = chartMarginTop + scaleMarginTop
+        + timeline.tasks.length * (taskHeight + taskPadding)
+        + timeline.swimlanes.length * swimlanePadding;
+
+    const dateScalePaddingPercent = 0.2;
+    const minTaskDate = timeline.tasks
+        .map(task => task.interval.start)
+        .reduce((min, curr) => (!min || curr < min) ? curr : min);
+    const maxTaskDate = timeline.tasks
+        .map(task => task.interval.end)
+        .reduce((max, curr) => (!max || curr > max) ? curr : max);
+    const dateScalePaddingDays = Math.ceil(diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent);
+    const minScaleDate = addDays(minTaskDate, -dateScalePaddingDays);
+    const maxScaleDate = addDays(maxTaskDate, dateScalePaddingDays);
 
     // fixed point iteration for self-referential calculation
+    let maxTaskLabelOverflowRight = 0;
     const numIters = 5;
     for (let iter = 0; iter < numIters; iter++) {
         maxTaskLabelOverflowRight = timeline.tasks.map((curr) => {
-            const mainSectionSize = width - marginLeft - maxTaskLabelOverflowRight;
-            const percent = (maxDate - curr.interval.end) / (maxDate - minDate);
+            const mainSectionSize = width - chartMarginLeft - maxTaskLabelOverflowRight;
+            const percent = (maxScaleDate - curr.interval.end) / (maxScaleDate - minScaleDate);
             const rightEdge = percent * mainSectionSize;
 
             return measureText(curr.name, textSize) + textPadding
@@ -228,20 +224,7 @@ function renderTimeline(rawTimeline) {
                 + 2 // fex extra pixels just to be safe
         }).reduce((max, curr) => curr > max ? curr : max, 0);
     }
-
-    const marginRight = maxTaskLabelOverflowRight;
-    const taskHeight = 15;
-    const taskPadding = 5;
-    const textColor = "black"
-    const swimlanePadding = 5;
-    const titleTextSize = timeline.title ? 16 : 0;
-    const titlePaddingTop = timeline.title ? 8 : 0;
-    const titlePaddingBottom = timeline.title ? 18 : 0;
-    const marginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
-    const spacingTop = 5;
-    const height = marginTop + spacingTop
-        + timeline.tasks.length * (taskHeight + taskPadding)
-        + timeline.swimlanes.length * swimlanePadding;
+    const chartMarginRight = maxTaskLabelOverflowRight;
 
     let cumulativeTaskIndex = 0
     const perSwimlaneTasks = timeline.swimlanes.map((swimlane, swimlaneIndex) => {
@@ -266,12 +249,6 @@ function renderTimeline(rawTimeline) {
         return { tasks, swimlane: swimlaneWithCount };
     });
 
-    // Declare the x (horizontal position) scale.
-    const x = d3.scaleUtc()
-        .domain([minDate, maxDate])
-        .range([marginLeft, width - marginRight])
-
-    // Create the SVG container.
     const svg = d3.create("svg")
         .attr("width", width)
         .attr("height", height)
@@ -286,43 +263,46 @@ function renderTimeline(rawTimeline) {
             .attr("text-anchor", "middle")
     }
 
+    const dateScale = d3.scaleUtc()
+        .domain([minScaleDate, maxScaleDate])
+        .range([chartMarginLeft, width - chartMarginRight])
+
     const xAxisGrid = svg.selectAll('line.horizontalGrid')
-        .data(x.ticks(20))
+        .data(dateScale.ticks(20))
         .enter()
         .append("line")
-        .attr("x1", d => x(d))
-        .attr("x2", d => x(d))
-        .attr("y1", marginTop)
+        .attr("x1", d => dateScale(d))
+        .attr("x2", d => dateScale(d))
+        .attr("y1", chartMarginTop)
         .attr("y2", height)
         .attr("stroke", "#ccc")
 
-    // Add the x-axis.
-    svg.append("g")
-        .attr("transform", `translate(0,${marginTop})`)
-        .call(d3.axisTop(x))
+    const xAxis = svg.append("g")
+        .attr("transform", `translate(0, ${chartMarginTop})`)
+        .call(d3.axisTop(dateScale))
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
-        svg.selectAll("bars")
+        const taskRects = svg.selectAll("taskbars")
             .data(tasks)
             .enter()
             .append("rect")
-            .attr("x", d => x(d.interval.start))
+            .attr("x", d => dateScale(d.interval.start))
             .attr("y", d => {
-                return marginTop + spacingTop
+                return chartMarginTop + scaleMarginTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
                     + swimlanePadding * d.swimlaneIndex;
             })
-            .attr("width", d => x(d.interval.end) - x(d.interval.start))
+            .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
             .attr("height", d => taskHeight)
             .attr("fill", d => d.swimlane.color)
 
-        svg.selectAll("bartextlabels")
+        const taskTextLabels = svg.selectAll("tasktextlabels")
             .data(tasks)
             .enter()
             .append("text")
-            .attr("x", d => x(d.interval.end) + textPadding)
+            .attr("x", d => dateScale(d.interval.end) + textPadding)
             .attr("y", d => {
-                return marginTop + spacingTop
+                return chartMarginTop + scaleMarginTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
                     + swimlanePadding * d.swimlaneIndex;
             })
@@ -330,17 +310,17 @@ function renderTimeline(rawTimeline) {
             .attr("font-size", textSize)
             .attr("text-anchor", "start")
             .attr("height", d => taskHeight)
-            .attr("fill", textColor)
+            .attr("fill", taskLabelTextColor)
             .text(d => d.name)
 
         if (dateLabels) {
-            svg.selectAll("bardatelabels")
+            const taskDateLabels = svg.selectAll("taskdatelabels")
                 .data(tasks)
                 .enter()
                 .append("text")
-                .attr("x", d => x(d.interval.start))
+                .attr("x", d => dateScale(d.interval.start))
                 .attr("y", d => {
-                    return marginTop + spacingTop
+                    return chartMarginTop + scaleMarginTop
                         + (taskHeight + taskPadding) * d.taskIndexOverall
                         + swimlanePadding * d.swimlaneIndex;
                 })
@@ -349,33 +329,33 @@ function renderTimeline(rawTimeline) {
                 .attr("font-size", textSize - 2)
                 .attr("text-anchor", "end")
                 .attr("height", d => taskHeight)
-                .attr("fill", textColor)
+                .attr("fill", taskDateLabelTextColor)
                 .text(d => getDateRangeText(d.interval.start, d.interval.end))
         }
     }
 
-    svg.selectAll("swimlanelabel")
+    const swimlaneRects = svg.selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
         .enter()
         .append("rect")
         .attr("x", 0)
         .attr("y", d => {
-            return marginTop + spacingTop
+            return chartMarginTop + scaleMarginTop
                 + (taskHeight + taskPadding) * d.taskIndexOverall
                 + swimlanePadding * d.swimlaneIndex;
         })
-        .attr("width", marginLeft - 5)
+        .attr("width", chartMarginLeft - 5)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("fill", d => d.color)
 
-    svg.selectAll("swimlanelabel")
+    const swimlaneRectLabels = svg.selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
         .enter()
         .append("text")
         .text(d => d.name)
-        .attr("x", marginLeft / 2 - 2)
+        .attr("x", chartMarginLeft / 2 - 2)
         .attr("y", d => {
-            return marginTop + spacingTop
+            return chartMarginTop + scaleMarginTop
                 + (taskHeight + taskPadding) * d.taskIndexOverall
                 + swimlanePadding * d.swimlaneIndex;
         })
@@ -384,12 +364,12 @@ function renderTimeline(rawTimeline) {
         .attr("font-size", textSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("text-anchor", "middle")
-        .attr("fill", "#fff")
+        .attr("fill", swimlaneLabelTextColor)
 
     return svg;
 }
 
-function rerender() {
+function rerenderTimeline() {
     const svg = renderTimeline(timeline);
     while (container.firstChild) {
         container.removeChild(container.lastChild);
@@ -397,4 +377,35 @@ function rerender() {
     container.append(svg.node());
 }
 
-rerender();
+
+var _debugGlobalMonacoEditor;
+function initializeMonacoEditorAsynchronously() {
+    console.log("Loading Monaco editor...");
+
+    require.config({ paths: { vs: 'monaco-editor/min/vs' } });
+    require(['vs/editor/editor.main'], () => {
+        console.log("Initializing Monaco editor...");
+
+        const editor = monaco.editor.create(monacoContainer, {
+            value: JSON.stringify(timeline, null, 2),
+            language: 'json',
+            minimap: { enabled: false },
+        });
+        _debugGlobalMonacoEditor = editor;
+
+        editor.getModel().onDidChangeContent(() => {
+            const json = editor.getModel().createSnapshot().read();
+            timeline = JSON.parse(json);
+            rerenderTimeline();
+        });
+
+        console.log("Initialized Monaco editor.");
+    });
+}
+
+function main() {
+    initializeMonacoEditorAsynchronously();
+    rerenderTimeline();
+}
+
+main();
