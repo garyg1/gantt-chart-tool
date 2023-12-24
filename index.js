@@ -311,6 +311,7 @@ function renderTimeline(rawTimeline) {
 
         // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
         const rectTextAlignmentOffsetHackPixels = 0.75;
+        // TODO: split into multiple lines on overflow
         const taskTextLabels = svg.selectAll("tasktextlabels")
             .data(tasks)
             .enter()
@@ -324,14 +325,14 @@ function renderTimeline(rawTimeline) {
             .attr("dx", textPadding)
             .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
             .attr("font-size", taskNameLabelTextSize)
-            // https://stackoverflow.com/a/15997503
-            .attr("dominant-baseline", "middle")
+            .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
             .attr("text-anchor", "start")
             .attr("font-family", font)
             .attr("fill", taskLabelTextColor)
             .text(d => d.name)
 
         if (dateLabels) {
+            // TODO: fix overflow into left margin
             const taskDateLabels = svg.selectAll("taskdatelabels")
                 .data(tasks)
                 .enter()
@@ -345,8 +346,7 @@ function renderTimeline(rawTimeline) {
                 .attr("dx", d => -dateRangePadding)
                 .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
                 .attr("font-size", taskDateLabelTextSize)
-                // https://stackoverflow.com/a/15997503
-                .attr("dominant-baseline", "middle")
+                .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
                 .attr("font-family", font)
                 .attr("text-anchor", "end")
                 .attr("fill", taskDateLabelTextColor)
