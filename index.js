@@ -224,7 +224,7 @@ function renderTimeline(rawTimeline) {
 
     // fixed point iteration for self-referential calculation
     let maxTaskLabelOverflowRight = 0;
-    const numIters = 5;
+    const numIters = 10;
     for (let iter = 0; iter < numIters; iter++) {
         maxTaskLabelOverflowRight = timeline.tasks.map((curr) => {
             const mainSectionSize = width - chartMarginLeft - maxTaskLabelOverflowRight;
