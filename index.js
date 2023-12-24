@@ -401,12 +401,8 @@ function rerenderTimeline() {
 
 var _debugGlobalMonacoEditor;
 function initializeMonacoEditorAsynchronously() {
-    console.log("Loading Monaco editor...");
-
     require.config({ paths: { vs: 'monaco-editor/min/vs' } });
     require(['vs/editor/editor.main'], () => {
-        console.log("Initializing Monaco editor...");
-
         const editor = monaco.editor.create(monacoContainer, {
             value: JSON.stringify(timeline, null, 2),
             language: 'json',
@@ -419,8 +415,6 @@ function initializeMonacoEditorAsynchronously() {
             timeline = JSON.parse(json);
             rerenderTimeline();
         });
-
-        console.log("Initialized Monaco editor.");
     });
 }
 
