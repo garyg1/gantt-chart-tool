@@ -28,6 +28,7 @@ var timeline = {
     config: {
         dateLabels: true,
         width: 800,
+        font: 'sans-serif',
     },
     swimlanes: [
         {
@@ -112,13 +113,13 @@ function assertTimelineValid(timeline) {
     }
 }
 
-const d3Font = 'sans-serif';
+// https://stackoverflow.com/a/35373030
 const measureText = ((() => {
     var canvas = document.createElement('canvas'),
         context = canvas.getContext('2d');
 
-    return function measureText(text, fontSize) {
-        context.font = fontSize + 'px ' + d3Font;
+    return function measureText(text, fontSize, font) {
+        context.font = fontSize + 'px ' + font;
         return context.measureText(text).width;
     }
 })());
@@ -145,6 +146,13 @@ function parseIntOrDefault(maybeInt, defaultIfNotInt) {
     return defaultIfNotInt;
 }
 
+function parseStringOrDefault(maybeString, defaultIfNotString) {
+    if (typeof maybeString === "string") {
+        return maybeString;
+    }
+    return defaultIfNotString;
+}
+
 function parseBoolOrDefault(maybeBool, defaultIfNotBool) {
     if (maybeBool === true || maybeBool === false) {
         return maybeBool;
@@ -154,6 +162,7 @@ function parseBoolOrDefault(maybeBool, defaultIfNotBool) {
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
+const DEFAULT_FONT = 'sans-serif';
 
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
@@ -176,9 +185,11 @@ function renderTimeline(rawTimeline) {
         config: rawTimeline.config || {},
     };
 
+    const font = parseStringOrDefault(timeline.config.font, DEFAULT_FONT);
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
-    const textSize = 12;
+    const taskNameLabelTextSize = 12;
+    const taskDateLabelTextSize = 10;
     const textPadding = 6;
     const labelPadding = 12;
     const dateRangePadding = 6;
@@ -186,12 +197,13 @@ function renderTimeline(rawTimeline) {
     const taskPadding = 5;
     const taskLabelTextColor = "#000";
     const swimlaneLabelTextColor = "#fff";
-    const taskDateLabelTextColor = "#666";
+    const taskDateLabelTextColor = "#555";
+    const xAxisGridColor = "#ddd";
     const swimlanePadding = 5;
     const titleTextSize = timeline.title ? 16 : 0;
     const titlePaddingTop = timeline.title ? 8 : 0;
     const titlePaddingBottom = timeline.title ? 18 : 0;
-    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce((max, curr) => Math.max(measureText(curr.name, textSize), max), 0);
+    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce((max, curr) => Math.max(measureText(curr.name, taskNameLabelTextSize, font), max), 0);
     const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
     const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
     const scaleMarginTop = 5;
@@ -219,7 +231,7 @@ function renderTimeline(rawTimeline) {
             const percent = (maxScaleDate - curr.interval.end) / (maxScaleDate - minScaleDate);
             const rightEdge = percent * mainSectionSize;
 
-            return measureText(curr.name, textSize) + textPadding
+            return measureText(curr.name, taskNameLabelTextSize, font) + textPadding
                 - rightEdge
                 + 2 // fex extra pixels just to be safe
         }).reduce((max, curr) => curr > max ? curr : max, 0);
@@ -252,7 +264,7 @@ function renderTimeline(rawTimeline) {
     const svg = d3.create("svg")
         .attr("width", width)
         .attr("height", height)
-        .attr("font-family", "sans-serif")
+        .attr("font-family", font)
 
     if (timeline.title) {
         const title = svg.append("text")
@@ -260,6 +272,7 @@ function renderTimeline(rawTimeline) {
             .attr("x", width / 2)
             .attr("y", titleTextSize + titlePaddingTop)
             .attr("font-size", titleTextSize)
+            .attr("font-family", font)
             .attr("text-anchor", "middle")
     }
 
@@ -275,7 +288,7 @@ function renderTimeline(rawTimeline) {
         .attr("x2", d => dateScale(d))
         .attr("y1", chartMarginTop)
         .attr("y2", height)
-        .attr("stroke", "#ccc")
+        .attr("stroke", xAxisGridColor)
 
     const xAxis = svg.append("g")
         .attr("transform", `translate(0, ${chartMarginTop})`)
@@ -296,20 +309,25 @@ function renderTimeline(rawTimeline) {
             .attr("height", d => taskHeight)
             .attr("fill", d => d.swimlane.color)
 
+        // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
+        const rectTextAlignmentOffsetHackPixels = 0.75;
         const taskTextLabels = svg.selectAll("tasktextlabels")
             .data(tasks)
             .enter()
             .append("text")
-            .attr("x", d => dateScale(d.interval.end) + textPadding)
+            .attr("x", d => dateScale(d.interval.end))
             .attr("y", d => {
                 return chartMarginTop + scaleMarginTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
                     + swimlanePadding * d.swimlaneIndex;
             })
-            .attr("dy", d => textSize)
-            .attr("font-size", textSize)
+            .attr("dx", textPadding)
+            .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
+            .attr("font-size", taskNameLabelTextSize)
+            // https://stackoverflow.com/a/15997503
+            .attr("dominant-baseline", "middle")
             .attr("text-anchor", "start")
-            .attr("height", d => taskHeight)
+            .attr("font-family", font)
             .attr("fill", taskLabelTextColor)
             .text(d => d.name)
 
@@ -325,10 +343,12 @@ function renderTimeline(rawTimeline) {
                         + swimlanePadding * d.swimlaneIndex;
                 })
                 .attr("dx", d => -dateRangePadding)
-                .attr("dy", d => textSize)
-                .attr("font-size", textSize - 2)
+                .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
+                .attr("font-size", taskDateLabelTextSize)
+                // https://stackoverflow.com/a/15997503
+                .attr("dominant-baseline", "middle")
+                .attr("font-family", font)
                 .attr("text-anchor", "end")
-                .attr("height", d => taskHeight)
                 .attr("fill", taskDateLabelTextColor)
                 .text(d => getDateRangeText(d.interval.start, d.interval.end))
         }
@@ -360,10 +380,11 @@ function renderTimeline(rawTimeline) {
                 + swimlanePadding * d.swimlaneIndex;
         })
         .attr("dx", 0)
-        .attr("dy", d => (taskHeight + taskPadding) * d.numTasks / 2 - taskPadding / 2 + textSize / 2)
-        .attr("font-size", textSize)
+        .attr("dy", d => (taskHeight + taskPadding) * d.numTasks / 2 - taskPadding / 2 + taskNameLabelTextSize / 2)
+        .attr("font-size", taskNameLabelTextSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("text-anchor", "middle")
+        .attr("font-family", font)
         .attr("fill", swimlaneLabelTextColor)
 
     return svg;
