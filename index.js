@@ -34,7 +34,9 @@ var timeline = {
         {
             id: '1',
             name: 'Coding Tasks',
-            color: '#0071c5'
+            color: '#0071c5',
+            compress: false,
+            parellelism: 1,
         },
         {
             id: '2',
@@ -128,10 +130,12 @@ function getDateRangeText(start, end) {
     const startText = start.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
+        timeZone: 'UTC',
     })
     const endText = end.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
+        timeZone: 'UTC',
     })
     if (startText === endText) {
         return start;
@@ -170,17 +174,20 @@ function renderTimeline(rawTimeline) {
     const timeline = {
         ...rawTimeline,
         tasks: rawTimeline.tasks
-            .slice()
-            .sort((a, b) => {
-                const intervalStartCmp = a.interval.start.localeCompare(b.interval.start);
-                return intervalStartCmp;
-            }).map(t => ({
+            .map(t => ({
                 ...t,
                 interval: {
                     start: new Date(t.interval.start),
                     end: new Date(t.interval.end),
                 }
-            })),
+            }))
+            .sort((a, b) => {
+                const diff = a.interval.start.getTime() - b.interval.start.getTime();
+                if (diff != 0) {
+                    return diff;
+                }
+                return a.interval.end.getTime() - b.interval.end.getTime();
+            }),
         swimlanes: rawTimeline.swimlanes || [],
         config: rawTimeline.config || {},
     };
