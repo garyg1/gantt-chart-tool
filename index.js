@@ -358,6 +358,9 @@ function getSublanes(assignment, fixedTasks, swimlane, baseDate) {
  * @returns {[number[], number]} assignment, score
  */
 function solve(lanes, tasks) {
+    if (tasks.length === 0) {
+        return [[], 0];
+    }
     const memo = {};
     function getKey(arr, i) {
         arr.push(i);
