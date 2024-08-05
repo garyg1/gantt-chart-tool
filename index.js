@@ -51,13 +51,31 @@ var timeline = {
             compress: false,
             parallelism: 2,
             workers: ["Engineer A", "Engineer B"],
+        },
+        {
+            id: '2',
+            name: 'Other Tasks',
+            color: '#71c500',
+            compress: false,
+            parallelism: 2,
+            workers: ["Engineer A", "Engineer B"],
         }
     ],
     tasks: [
-        randomTask("Task A", "1"),
-        randomTask("Task B", "1"),
-        randomTask("Task C", "1"),
-        randomTask("Task D", "1"),
+        randomTask("Task 1A", "1"),
+        randomTask("Task 1B", "1"),
+        randomTask("Task 1C", "1"),
+        randomTask("Task 1D", "1"),
+        randomTask("Task 1E", "1"),
+        randomTask("Task 1F", "1"),
+        randomTask("Task 1G", "1"),
+        randomTask("Task 2A", "2"),
+        randomTask("Task 2B", "2"),
+        randomTask("Task 2C", "2"),
+        randomTask("Task 2D", "2"),
+        randomTask("Task 2E", "2"),
+        randomTask("Task 2F", "2"),
+        randomTask("Task 2G", "2"),
     ]
 }
 
@@ -66,7 +84,7 @@ var timeline = {
  * @param {string} swimlaneId
  */
 function randomTask(name, swimlaneId) {
-    const p_duration = 0.6;
+    const p_duration = 0.8;
     const maxDays = 21;
     const minDays = 5;
 
@@ -296,7 +314,6 @@ function getValidAssignments(fixedTasks, swimlane) {
 function getSublanes(assignment, fixedTasks, swimlane, baseDate) {
     const endDate = new Date("9999-12-31");
     const intervals = range(0, swimlane.parallelism).map(_ => [[baseDate, endDate]]);
-    console.log("getSublanes", intervals);
     for (let i = 0; i < assignment.length; i++) {
         const task = fixedTasks[i];
         const lane = assignment[i];
@@ -323,13 +340,13 @@ function getSublanes(assignment, fixedTasks, swimlane, baseDate) {
             .flat()
             .filter(i => i[0] < i[1]);
     }
-    console.log("getSublanes", intervals);
 
     return intervals
         .map((intervals, idx) => intervals
             .map(i => ({
                 interval: i,
                 originalLaneIdx: idx,
+                offset: i[0].getTime() - baseDate.getTime(),
             })))
         .flat();
 }
@@ -349,9 +366,17 @@ function solve(lanes, tasks) {
         return ans;
     }
     function inner(lens, i) {
-        console.log("inner", lens, i, tasks, lanes);
         if (i == tasks.length) {
-            return [[], lens.slice().sort().reverse()[0]];
+            let maxLen = 0;
+            for (let i = 0; i < lens.length; i++) {
+                if (lens[i] > 0) {
+                    const currLen = lens[i] + lanes[i].offset;
+                    if (currLen > maxLen) {
+                        maxLen = currLen;
+                    }
+                }
+            }
+            return [[], maxLen];
         }
 
         const key = getKey(lens, i);
@@ -366,8 +391,8 @@ function solve(lanes, tasks) {
             const currLen = lens[j];
             const lane = lanes[j];
             const laneSize = lane.interval[1].getTime() - lane.interval[0].getTime();
-            console.log(currLen, task.parsedDurationDays, laneSize);
-            if (currLen + task.parsedDurationDays * dayToMs <= laneSize) {
+            const fits = currLen + task.parsedDurationDays * dayToMs <= laneSize;
+            if (fits) {
                 lens[j] += task.parsedDurationDays * dayToMs;
                 const [currSeq, currResult] = inner(lens, i + 1);
                 lens[j] -= task.parsedDurationDays * dayToMs;
@@ -378,8 +403,8 @@ function solve(lanes, tasks) {
 
                 if (best === null || currResult < best) {
                     best = currResult;
-                    currSeq.push(j);
-                    bestSeq = currSeq;
+                    bestSeq = currSeq.slice();
+                    bestSeq.push(j);
                 }
             }
         }
@@ -392,6 +417,7 @@ function solve(lanes, tasks) {
     const ret = inner(initialLens, 0);
     const [seq, bestScore] = ret;
     console.log(seq, bestScore);
+    seq.reverse();
     return [seq, bestScore];
 }
 
@@ -419,11 +445,12 @@ function getPreprocessedTasks(rawTimeline) {
         const freeTasks = allTasks.filter(t => t.duration);
 
         const assignments = getValidAssignments(fixedTasks, swimlane);
-        console.log(assignments);
         for (const assignment of assignments) {
             const sublanes = getSublanes(assignment, fixedTasks, swimlane, baseDate);
             const [seq, score] = solve(sublanes, freeTasks);
+            console.log("final", seq, score, sublanes);
             if (score < bestScore) {
+                console.log("best");
                 bestSeq = seq;
                 bestScore = score;
                 bestSublanes = sublanes;
@@ -433,6 +460,7 @@ function getPreprocessedTasks(rawTimeline) {
 
         // calculate start and end for optimal ordering
         let sublaneIdx = -1;
+        const currTasks = [];
         for (const sublane of bestSublanes) {
             sublaneIdx += 1;
             let base = sublane.interval[0];
@@ -447,7 +475,7 @@ function getPreprocessedTasks(rawTimeline) {
                     endDate: new Date(base.getTime() + task.parsedDurationDays * dayToMs),
                 };
                 task.assignedSubSwimlaneIdx = sublane.originalLaneIdx;
-                processedTasks.push(task);
+                currTasks.push(task);
                 base = new Date(base.getTime() + task.parsedDurationDays * dayToMs);
             }
         }
@@ -455,8 +483,23 @@ function getPreprocessedTasks(rawTimeline) {
         for (let i = 0; i < fixedTasks.length; i++) {
             const task = fixedTasks[i];
             task.assignedSubSwimlaneIdx = bestFixedTaskAssignment[i];
-            processedTasks.push(task);
+            currTasks.push(task);
         }
+
+        currTasks.sort((t1, t2) => {
+            const cmp1 = t1.interval.startDate.getTime() - t2.interval.startDate.getTime();
+            if (cmp1 != 0) {
+                return cmp1;
+            }
+
+            const cmp2 = t1.interval.endDate.getTime() - t2.interval.endDate.getTime();
+            if (cmp2 != 0) {
+                return cmp2;
+            }
+
+            return 0;
+        });
+        processedTasks.push(...currTasks);
     }
 
     console.log('Finished preprocessing.');
