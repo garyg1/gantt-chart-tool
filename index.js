@@ -49,52 +49,15 @@ var timeline = {
             name: 'Coding Tasks',
             color: '#0071c5',
             compress: false,
-            maxParellelism: 2,
+            parallelism: 2,
             workers: ["Engineer A", "Engineer B"],
-        },
-        {
-            id: '2',
-            name: 'Non-coding tasks',
-            color: '#00c571'
-        },
-        {
-            id: '3',
-            name: 'Dependencies',
-            color: '#7100c5'
         }
     ],
     tasks: [
-        {
-            name: 'Task B',
-            duration: 'PT5D',
-            swimlaneId: '1',
-        },
-        {
-            name: 'Task C',
-            duration: 'PT5D',
-            swimlaneId: '1',
-            workers: ["Engineer A"],
-        },
-        {
-            name: 'Task D',
-            duration: 'PT3D',
-            swimlaneId: '1',
-            workers: ["Engineer B"],
-        },
-        {
-            name: 'Task J',
-            swimlaneId: '1',
-            workers: ["Engineer B"],
-            interval: {
-                start: "2024-08-15",
-                end: "2024-08-30",
-            },
-        },
         randomTask("Task A", "1"),
-        randomTask("Task E", "1"),
-        randomTask("Task F", "1"),
-        randomTask("Task G", "1"),
-        randomTask("Task H", "1"),
+        randomTask("Task B", "1"),
+        randomTask("Task C", "1"),
+        randomTask("Task D", "1"),
     ]
 }
 
@@ -148,14 +111,23 @@ function diffDays(date1, date2) {
  */
 function assertTimelineValid(timeline) {
     for (const task of timeline.tasks) {
-        if (task.interval.start > task.interval.end) {
-            throw new Error(`Task '${task.id}' ('${task.name}') has start > end.`);
+        if ('interval' in task) {
+            if (task.interval.start > task.interval.end) {
+                throw new Error(`Task '${task.id}' ('${task.name}') has start > end.`);
+            }
         }
 
         if (!timeline.swimlanes.some(swimlane => swimlane.id === task.swimlaneId)) {
             throw new Error(`Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`)
         }
     }
+}
+
+/**
+ * @param {Date} d 
+ */
+function toUtcDateOnlyString(d) {
+    d.toISOString().split('T')[0];
 }
 
 // https://stackoverflow.com/a/35373030
@@ -266,7 +238,7 @@ function parseTask(rawTask) {
     if ('duration' in rawTask) {
         return {
             ...rawTask,
-            parsedDurationDays: parseInt(rawTask.duration.slice(2, rawTask.duration - 1))
+            parsedDurationDays: parseInt(rawTask.duration.slice(2, rawTask.duration.length - 1))
         }
     }
 
@@ -324,7 +296,7 @@ function getValidAssignments(fixedTasks, swimlane) {
 function getSublanes(assignment, fixedTasks, swimlane, baseDate) {
     const endDate = new Date("9999-12-31");
     const intervals = range(0, swimlane.parallelism).map(_ => [[baseDate, endDate]]);
-
+    console.log("getSublanes", intervals);
     for (let i = 0; i < assignment.length; i++) {
         const task = fixedTasks[i];
         const lane = assignment[i];
@@ -351,6 +323,7 @@ function getSublanes(assignment, fixedTasks, swimlane, baseDate) {
             .flat()
             .filter(i => i[0] < i[1]);
     }
+    console.log("getSublanes", intervals);
 
     return intervals
         .map((intervals, idx) => intervals
@@ -376,22 +349,24 @@ function solve(lanes, tasks) {
         return ans;
     }
     function inner(lens, i) {
+        console.log("inner", lens, i, tasks, lanes);
         if (i == tasks.length) {
-            return [lens].sort().reversed()[0];
+            return [[], lens.slice().sort().reverse()[0]];
         }
 
         const key = getKey(lens, i);
-        if (key in memo) {
+        if (memo[key] !== undefined) {
             return memo[key];
         }
 
         const task = tasks[i];
         let best = null;
-        let seq = null;
+        let bestSeq = null;
         for (const j of range(0, lanes.length)) {
             const currLen = lens[j];
             const lane = lanes[j];
             const laneSize = lane.interval[1].getTime() - lane.interval[0].getTime();
+            console.log(currLen, task.parsedDurationDays, laneSize);
             if (currLen + task.parsedDurationDays * dayToMs <= laneSize) {
                 lens[j] += task.parsedDurationDays * dayToMs;
                 const [currSeq, currResult] = inner(lens, i + 1);
@@ -404,33 +379,47 @@ function solve(lanes, tasks) {
                 if (best === null || currResult < best) {
                     best = currResult;
                     currSeq.push(j);
-                    seq = currSeq;
+                    bestSeq = currSeq;
                 }
             }
         }
 
-        return [seq, best];
+        memo[key] = [bestSeq, best];
+        return [bestSeq, best];
     }
 
     const initialLens = range(0, lanes.length).map(_ => 0);
-    const [seq, bestScore] = inner(initialLens, 0);
+    const ret = inner(initialLens, 0);
+    const [seq, bestScore] = ret;
+    console.log(seq, bestScore);
     return [seq, bestScore];
 }
 
+/**
+ * @param {{ tasks: RawTask[] }} rawTimeline 
+ */
 function getPreprocessedTasks(rawTimeline) {
+    console.log('Starting preprocessing...');
     const baseDate = new Date(rawTimeline.config.baseDate);
-    let bestSeq = null;
-    let bestScore = Infinity;
-    /** @type {ReturnType<getSublanes>} */
-    let bestSublanes = null;
+    const processedTasks = []
     for (const swimlane of rawTimeline.swimlanes || []) {
+        let bestSeq = null;
+        let bestScore = Infinity;
+        /** @type {ReturnType<getSublanes>} */
+        let bestSublanes = null;
+        /** @type {number[]} */
+        let bestFixedTaskAssignment = null;
+
         const allTasks = rawTimeline.tasks
             .filter(t => t.swimlaneId == swimlane.id)
             .map(t => parseTask(t));
+
+        // find optimal ordering
         const fixedTasks = allTasks.filter(t => t.interval);
         const freeTasks = allTasks.filter(t => t.duration);
 
         const assignments = getValidAssignments(fixedTasks, swimlane);
+        console.log(assignments);
         for (const assignment of assignments) {
             const sublanes = getSublanes(assignment, fixedTasks, swimlane, baseDate);
             const [seq, score] = solve(sublanes, freeTasks);
@@ -438,20 +427,41 @@ function getPreprocessedTasks(rawTimeline) {
                 bestSeq = seq;
                 bestScore = score;
                 bestSublanes = sublanes;
+                bestFixedTaskAssignment = assignment;
             }
         }
-    
+
         // calculate start and end for optimal ordering
+        let sublaneIdx = -1;
         for (const sublane of bestSublanes) {
+            sublaneIdx += 1;
             let base = sublane.interval[0];
             for (let i = 0; i < freeTasks.length; i++) {
-                const task = freeTasks[i];
-                
+                if (bestSeq[i] != sublaneIdx) {
+                    continue;
+                }
+
+                const task = { ...freeTasks[i] };
+                task.interval = {
+                    startDate: base,
+                    endDate: new Date(base.getTime() + task.parsedDurationDays * dayToMs),
+                };
+                task.assignedSubSwimlaneIdx = sublane.originalLaneIdx;
+                processedTasks.push(task);
+                base = new Date(base.getTime() + task.parsedDurationDays * dayToMs);
             }
+        }
+
+        for (let i = 0; i < fixedTasks.length; i++) {
+            const task = fixedTasks[i];
+            task.assignedSubSwimlaneIdx = bestFixedTaskAssignment[i];
+            processedTasks.push(task);
         }
     }
 
-    return tasks;
+    console.log('Finished preprocessing.');
+
+    return processedTasks;
 }
 
 const DEFAULT_WIDTH = 800;
@@ -496,10 +506,10 @@ function renderTimeline(rawTimeline) {
 
     const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
-        .map(task => task.interval.start)
+        .map(task => task.interval.startDate)
         .reduce((min, curr) => (!min || curr < min) ? curr : min);
     const maxTaskDate = timeline.tasks
-        .map(task => task.interval.end)
+        .map(task => task.interval.endDate)
         .reduce((max, curr) => (!max || curr > max) ? curr : max);
     const dateScalePaddingDays = Math.ceil(diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent);
     const minScaleDate = addDays(minTaskDate, -dateScalePaddingDays);
@@ -511,7 +521,7 @@ function renderTimeline(rawTimeline) {
     for (let iter = 0; iter < numIters; iter++) {
         maxTaskLabelOverflowRight = timeline.tasks.map((curr) => {
             const mainSectionSize = width - chartMarginLeft - maxTaskLabelOverflowRight;
-            const percent = (maxScaleDate - curr.interval.end) / (maxScaleDate - minScaleDate);
+            const percent = (maxScaleDate - curr.interval.endDate) / (maxScaleDate - minScaleDate);
             const rightEdge = percent * mainSectionSize;
 
             return measureText(curr.name, taskNameLabelTextSize, font) + textPadding
@@ -582,13 +592,13 @@ function renderTimeline(rawTimeline) {
             .data(tasks)
             .enter()
             .append("rect")
-            .attr("x", d => dateScale(d.interval.start))
+            .attr("x", d => dateScale(d.interval.startDate))
             .attr("y", d => {
                 return chartMarginTop + scaleMarginTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
                     + swimlanePadding * d.swimlaneIndex;
             })
-            .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
+            .attr("width", d => dateScale(d.interval.endDate) - dateScale(d.interval.startDate))
             .attr("height", d => taskHeight)
             .attr("fill", d => d.swimlane.color)
 
@@ -599,7 +609,7 @@ function renderTimeline(rawTimeline) {
             .data(tasks)
             .enter()
             .append("text")
-            .attr("x", d => dateScale(d.interval.end))
+            .attr("x", d => dateScale(d.interval.endDate))
             .attr("y", d => {
                 return chartMarginTop + scaleMarginTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
@@ -620,7 +630,7 @@ function renderTimeline(rawTimeline) {
                 .data(tasks)
                 .enter()
                 .append("text")
-                .attr("x", d => dateScale(d.interval.start))
+                .attr("x", d => dateScale(d.interval.startDate))
                 .attr("y", d => {
                     return chartMarginTop + scaleMarginTop
                         + (taskHeight + taskPadding) * d.taskIndexOverall
@@ -633,7 +643,7 @@ function renderTimeline(rawTimeline) {
                 .attr("font-family", font)
                 .attr("text-anchor", "end")
                 .attr("fill", taskDateLabelTextColor)
-                .text(d => getDateRangeText(d.interval.start, d.interval.end))
+                .text(d => getDateRangeText(d.interval.startDate, d.interval.endDate))
         }
     }
 
