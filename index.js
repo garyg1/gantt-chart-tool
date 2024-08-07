@@ -22,11 +22,38 @@
  */
 const container = document.getElementById('container');
 const monacoContainer = document.getElementById('monaco-container');
-const downloadButton = document.getElementById('svg-button');
+const downloadButton = document.getElementById('download-button');
+const clipboardButton = document.getElementById('clipboard-button');
 
-downloadButton.onclick = e => {
+const clipboardButtonDefaultText = "Copy to Clipboard";
+const clipboardButtonActiveText = "...";
+const clipboardButtonFinishedText = "Copied!";
+const downloadButtonDefaultText = "Download PNG";
+const downloadButtonActiveText = "...";
+const downloadButtonFinishedText = "Download started!";
+
+downloadButton.onclick = async e => {
+    const setText = (text) => {
+        downloadButton.innerText = text;
+    };
     e.preventDefault();
-    downloadPNG();
+    setText(downloadButtonActiveText);
+    await downloadPng();
+    await sleep(200);
+    setText(downloadButtonFinishedText);
+    setTimeout(() => setText(downloadButtonDefaultText), 1000);
+}
+
+clipboardButton.onclick = async e => {
+    const setText = (text) => {
+        clipboardButton.innerText = text;
+    };
+    e.preventDefault();
+    setText(clipboardButtonActiveText);
+    await copyPngToClipboard();
+    await sleep(200);
+    setText(clipboardButtonFinishedText);
+    setTimeout(() => setText(clipboardButtonDefaultText), 1400);
 }
 
 var timeline = {
@@ -124,6 +151,12 @@ function assertTimelineValid(timeline) {
     }
 }
 
+async function sleep(ms) {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    });
+}
+
 // https://stackoverflow.com/a/35373030
 const measureText = ((() => {
     const canvas = document.createElement('canvas');
@@ -146,8 +179,34 @@ const standardizeColor = ((() => {
     }
 })());
 
+// https://stackoverflow.com/a/5438011
+/** @returns {Promise<HTMLCanvasElement>} */
+async function renderAsCanvas() {
+    return new Promise((resolve) => {
+        const svg = renderTimeline(timeline).node();
+        const width = svg.width.baseVal.value;
+        const height = svg.height.baseVal.value;
+        var svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const loader = new Image();
+        loader.width = width;
+        loader.height = height;
+        canvas.width = width;
+        canvas.height = height;
+
+        loader.onload = function () {
+            context.drawImage(loader, 0, 0, loader.width, loader.height);
+            resolve(canvas);
+        };
+
+        loader.src = 'data:image/svg+xml,' + encodeURIComponent(svgAsXML);
+    });
+};
+
 // https://stackoverflow.com/a/15832662
-function downloadURI(uri, name) {
+function downloadUri(uri, name) {
     var link = document.createElement("a");
     link.download = name;
     link.href = uri;
@@ -157,30 +216,23 @@ function downloadURI(uri, name) {
     delete link;
 }
 
-// https://stackoverflow.com/a/5438011
-function downloadPNG() {
-    const svg = renderTimeline(timeline).node();
-    const width = svg.width.baseVal.value;
-    const height = svg.height.baseVal.value;
-    var svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
+async function downloadPng() {
+    const canvas = await renderAsCanvas();
+    downloadUri(canvas.toDataURL(), `${timeline.title}.timeline.${dateToIso(new Date())}.png`);
+}
 
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    const loader = new Image();
-    loader.width = width;
-    loader.height = height;
-    canvas.width = width;
-    canvas.height = height;
+// https://stackoverflow.com/a/59162806
+async function copyPngToClipboard() {
+    const blob = await renderAsCanvas()
+        .then(canvas => new Promise(resolve => canvas.toBlob(resolve)));
 
-    loader.onload = function () {
-        context.drawImage(loader, 0, 0, loader.width, loader.height);
-        const url = canvas.toDataURL();
-        downloadURI(url, `${timeline.title}.timeline.${dateToIso(new Date())}.png`);
-    };
-
-    loader.src = 'data:image/svg+xml,' + encodeURIComponent(svgAsXML);
-
-};
+    try {
+        console.log("writing to clipboard...", blob);
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch (error) {
+        console.error(error);
+    }
+}
 
 function getDateRangeText(start, end) {
     const startText = start.toLocaleDateString('en-US', {
@@ -370,7 +422,6 @@ function renderTimeline(rawTimeline) {
                 const t = swimlaneIndex * 1.0 / allSwimlanes.length;
                 const rgb = interpolateColor(gradientStart, gradientEnd, t);
                 swimlane.color = rgbToColor(rgb);
-                console.log(swimlane);
             }
 
             return swimlane;
