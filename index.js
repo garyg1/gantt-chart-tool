@@ -29,24 +29,22 @@ var timeline = {
         dateLabels: true,
         width: 800,
         font: 'sans-serif',
+        palette: {
+            gradient: ["#444", "#8a0"]
+        }
     },
     swimlanes: [
         {
             id: '1',
             name: 'Coding Tasks',
-            color: '#0071c5',
-            compress: false,
-            parellelism: 1,
         },
         {
             id: '2',
             name: 'Non-coding tasks',
-            color: '#00c571'
         },
         {
             id: '3',
             name: 'Dependencies',
-            color: '#7100c5'
         }
     ],
     tasks: [
@@ -126,6 +124,17 @@ const measureText = ((() => {
     }
 })());
 
+// https://stackoverflow.com/a/47355187
+const standardizeColor = ((() => {
+    var canvas = document.createElement('canvas'),
+        context = canvas.getContext('2d');
+
+    return function standardizeColor(str) {
+        context.fillStyle = str;
+        return context.fillStyle;
+    }
+})());
+
 function getDateRangeText(start, end) {
     const startText = start.toLocaleDateString('en-US', {
         month: 'short',
@@ -164,6 +173,66 @@ function parseBoolOrDefault(maybeBool, defaultIfNotBool) {
     return defaultIfNotBool;
 }
 
+/**
+ * @typedef {[number, number, number]} RGBColor
+ * @param {string} hex 
+ * @returns {RGBColor}
+ */
+function colorToRgb(hex) {
+    const color = standardizeColor(hex);
+    if (!color || color.length !== 7) {
+        console.warn("Failed to standardize color", hex, color);
+        return undefined;
+    }
+
+    return [
+        color.substring(1, 3),
+        color.substring(3, 5),
+        color.substring(5, 7),
+    ].map(c => parseInt(c, 16));
+}
+
+/**
+ * @param {RGBColor} rgb 
+ * @returns 
+ */
+function rgbToColor(rgb) {
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+
+/**
+ * @param {[string, string]} gradient 
+ * @returns {[boolean, RGBColor?, RGBColor?]}
+ */
+function parseGradient(gradient) {
+    if (!gradient) {
+        return [false, undefined, undefined];
+    }
+    if (gradient.length != 2) {
+        console.warn('Could not parse gradient', gradient);
+        return [false, undefined, undefined];
+    }
+
+    const start = colorToRgb(gradient[0]);
+    const end = colorToRgb(gradient[1]);
+    return [start !== undefined && end !== undefined, start, end];
+}
+
+/**
+ * @param {RGBColor} start
+ * @param {RGBColor} end
+ * @param {number} t truncated to [0, 1]
+ * @returns {RGBColor}
+ */
+function interpolateColor(start, end, t) {
+    t = Math.min(0, Math.max(1, t));
+    return [
+        Math.max(0, Math.min(Math.round((1 - t) * start[0] + t * end[0]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t) * start[1] + t * end[1]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t) * start[2] + t * end[2]), 255)),
+    ];
+}
+
 const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
 const DEFAULT_FONT = 'sans-serif';
@@ -195,6 +264,7 @@ function renderTimeline(rawTimeline) {
     const font = parseStringOrDefault(timeline.config.font, DEFAULT_FONT);
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
+    const [hasGradient, gradientStart, gradientEnd] = parseGradient(timeline.config.palette?.gradient);
     const taskNameLabelTextSize = 12;
     const taskDateLabelTextSize = 10;
     const textPadding = 6;
@@ -246,27 +316,38 @@ function renderTimeline(rawTimeline) {
     const chartMarginRight = maxTaskLabelOverflowRight;
 
     let cumulativeTaskIndex = 0
-    const perSwimlaneTasks = timeline.swimlanes.map((swimlane, swimlaneIndex) => {
-        const tasks = timeline.tasks
-            .filter(task => task.swimlaneId === swimlane.id)
-            .map((task, taskIndexInSwimlane) => ({
-                ...task,
-                swimlane,
+    const perSwimlaneTasks = timeline.swimlanes
+        .map((swimlane, swimlaneIndex, allSwimlanes) => {
+            swimlane = { ...swimlane };
+            if (!swimlane.color && hasGradient) {
+                const t = swimlaneIndex * 1.0 / allSwimlanes.length;
+                const rgb = interpolateColor(gradientStart, gradientEnd, t);
+                swimlane.color = rgbToColor(rgb);
+            }
+
+            return swimlane;
+        })
+        .map((swimlane, swimlaneIndex) => {
+            const tasks = timeline.tasks
+                .filter(task => task.swimlaneId === swimlane.id)
+                .map((task, taskIndexInSwimlane) => ({
+                    ...task,
+                    swimlane,
+                    swimlaneIndex,
+                    taskIndexInSwimlane,
+                    taskIndexOverall: taskIndexInSwimlane + cumulativeTaskIndex,
+                }));
+
+            const swimlaneWithCount = {
+                ...swimlane,
                 swimlaneIndex,
-                taskIndexInSwimlane,
-                taskIndexOverall: taskIndexInSwimlane + cumulativeTaskIndex,
-            }));
+                taskIndexOverall: cumulativeTaskIndex,
+                numTasks: tasks.length,
+            }
+            cumulativeTaskIndex += tasks.length;
 
-        const swimlaneWithCount = {
-            ...swimlane,
-            swimlaneIndex,
-            taskIndexOverall: cumulativeTaskIndex,
-            numTasks: tasks.length,
-        }
-        cumulativeTaskIndex += tasks.length;
-
-        return { tasks, swimlane: swimlaneWithCount };
-    });
+            return { tasks, swimlane: swimlaneWithCount };
+        });
 
     const svg = d3.create("svg")
         .attr("width", width)
