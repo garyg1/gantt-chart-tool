@@ -225,7 +225,7 @@ function parseGradient(gradient) {
  * @returns {RGBColor}
  */
 function interpolateColor(start, end, t) {
-    t = Math.min(0, Math.max(1, t));
+    t = Math.max(0, Math.min(1, t));
     return [
         Math.max(0, Math.min(Math.round((1 - t) * start[0] + t * end[0]), 255)),
         Math.max(0, Math.min(Math.round((1 - t) * start[1] + t * end[1]), 255)),
@@ -323,6 +323,7 @@ function renderTimeline(rawTimeline) {
                 const t = swimlaneIndex * 1.0 / allSwimlanes.length;
                 const rgb = interpolateColor(gradientStart, gradientEnd, t);
                 swimlane.color = rgbToColor(rgb);
+                console.log(swimlane);
             }
 
             return swimlane;
