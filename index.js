@@ -22,6 +22,12 @@
  */
 const container = document.getElementById('container');
 const monacoContainer = document.getElementById('monaco-container');
+const downloadButton = document.getElementById('svg-button');
+
+downloadButton.onclick = e => {
+    e.preventDefault();
+    downloadPNG();
+}
 
 var timeline = {
     title: 'Project A',
@@ -91,6 +97,11 @@ var timeline = {
     ]
 }
 
+/** @param {Date} date */
+function dateToIso(date) {
+    return date.toISOString().split('T')[0];
+}
+
 function addDays(date, days) {
     const ret = new Date(date);
     ret.setDate(ret.getDate() + days);
@@ -115,8 +126,8 @@ function assertTimelineValid(timeline) {
 
 // https://stackoverflow.com/a/35373030
 const measureText = ((() => {
-    var canvas = document.createElement('canvas'),
-        context = canvas.getContext('2d');
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
 
     return function measureText(text, fontSize, font) {
         context.font = fontSize + 'px ' + font;
@@ -126,14 +137,50 @@ const measureText = ((() => {
 
 // https://stackoverflow.com/a/47355187
 const standardizeColor = ((() => {
-    var canvas = document.createElement('canvas'),
-        context = canvas.getContext('2d');
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
 
     return function standardizeColor(str) {
         context.fillStyle = str;
         return context.fillStyle;
     }
 })());
+
+// https://stackoverflow.com/a/15832662
+function downloadURI(uri, name) {
+    var link = document.createElement("a");
+    link.download = name;
+    link.href = uri;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    delete link;
+}
+
+// https://stackoverflow.com/a/5438011
+function downloadPNG() {
+    const svg = renderTimeline(timeline).node();
+    const width = svg.width.baseVal.value;
+    const height = svg.height.baseVal.value;
+    var svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const loader = new Image();
+    loader.width = width;
+    loader.height = height;
+    canvas.width = width;
+    canvas.height = height;
+
+    loader.onload = function () {
+        context.drawImage(loader, 0, 0, loader.width, loader.height);
+        const url = canvas.toDataURL();
+        downloadURI(url, `${timeline.title}.timeline.${dateToIso(new Date())}.png`);
+    };
+
+    loader.src = 'data:image/svg+xml,' + encodeURIComponent(svgAsXML);
+
+};
 
 function getDateRangeText(start, end) {
     const startText = start.toLocaleDateString('en-US', {
@@ -354,6 +401,7 @@ function renderTimeline(rawTimeline) {
         .attr("width", width)
         .attr("height", height)
         .attr("font-family", font)
+        .style("background", "white");
 
     if (timeline.title) {
         const title = svg.append("text")
