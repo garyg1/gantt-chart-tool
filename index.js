@@ -28,6 +28,12 @@ const localStorageCheckbox = document.getElementById('localstorage-checkbox');
 const localStorageCheckboxLabel = document.getElementById('localstorage-checkbox-label');
 const localStorageCheckboxClickArea = document.getElementById('localstorage-checkbox-clickarea');
 
+window.onbeforeunload = e => {
+    if (!readFromLocalStorage()[0] && _mutated) {
+        e.preventDefault();
+    }
+}
+
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
@@ -36,6 +42,7 @@ const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = '#3c5ca2';
 
 let _debugGlobalMonacoEditor;
+let _mutated = false;
 let _lastKnownJson = null;
 let _timeline = {
     title: 'Project A',
@@ -278,11 +285,15 @@ function writeToLocalStorage(json) {
         window.localStorage.setItem(TIMELINE_LOCAL_STORAGE_KEY, json);
     }
     _lastKnownJson = json;
+    _mutated = true;
 }
 
 /** @returns {[boolean, string?]} (exists, value) */
 function readFromLocalStorage() {
     const json = window.localStorage.getItem(TIMELINE_LOCAL_STORAGE_KEY);
+    if (json !== null) {
+        _mutated = true;
+    }
     return [json !== null, json];
 }
 
@@ -709,5 +720,6 @@ function main() {
     initializeMonacoEditorAsynchronously(jsonToUse, renderedJson => writeToLocalStorage(renderedJson));
     rerenderTimeline();
 }
+
 
 main();
