@@ -10,6 +10,53 @@
         body {
             font-family: sans-serif;
         }
+
+        label {
+            cursor: pointer;
+            user-select: none;
+            transition: color 150ms;
+        }
+
+        .a-link {
+            text-decoration: underline;
+            cursor: pointer;
+            color: #3c5ca2;
+        }
+
+        [type=checkbox] {
+            width: 1.2rem;
+            height: 1.2rem;
+            color: #3c5ca2;
+            vertical-align: middle;
+            appearance: none;
+            border: 0;
+            outline: 0;
+            border-radius: 50%;
+            background: #fff;
+            transition: background-color 150ms;
+            cursor: pointer;
+        }
+
+        [type=checkbox]::before {
+            content: "";
+            color: transparent;
+            display: block;
+            width: inherit;
+            height: inherit;
+            border-radius: inherit;
+            background-color: transparent;
+            background-size: contain;
+            box-shadow: inset 0 0 0 1px #ccd3d8;
+        }
+
+        [type=checkbox]:checked {
+            background-color: currentcolor;
+        }
+
+        [type=checkbox]:checked::before {
+            box-shadow: none;
+            background-image: none;
+        }
     </style>
 </head>
 
@@ -22,10 +69,14 @@
             <div id="container" style="display: inline-block; margin: 0 auto;"></div>
         </div>
         <p style="position: fixed; right: 0; bottom: 0; text-align: right; padding: 10px; color: grey">
-            <small><a href="#" id="clipboard-button">Copy to Clipboard</a></small><br />
-            <small><a href="#" id="download-button">Download PNG</a></small><br /><br />
+            <small><a class="a-link" id="clipboard-button">Copy to Clipboard</a></small><br />
+            <small><a class="a-link" id="download-button">Download PNG</a></small><br /><br />
+            <small>
+                <label for="localstorage" id="localstorage-checkbox-label">Not persisted</label><input type="checkbox"
+                    id="localstorage-checkbox" name="localstorage" />
+            </small><br />
             <small>&copy; 2024 Gary Gurlaskie</small><br />
-            <small>Gantt Chart Maker v2024-08-07.1</small>
+            <small>Gantt Chart Maker v2024-08-07.2</small>
         </p>
     </div>
     <script src="./d3.v7.min.js"></script>

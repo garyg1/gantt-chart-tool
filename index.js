@@ -24,120 +24,154 @@ const container = document.getElementById('container');
 const monacoContainer = document.getElementById('monaco-container');
 const downloadButton = document.getElementById('download-button');
 const clipboardButton = document.getElementById('clipboard-button');
+const localStorageCheckbox = document.getElementById('localstorage-checkbox');
+const localStorageCheckboxLabel = document.getElementById('localstorage-checkbox-label');
+const localStorageCheckboxClickArea = document.getElementById('localstorage-checkbox-clickarea');
 
-const clipboardButtonDefaultText = "Copy to Clipboard";
-const clipboardButtonActiveText = "...";
-const clipboardButtonFinishedText = "Copied!";
-const downloadButtonDefaultText = "Download PNG";
-const downloadButtonActiveText = "...";
-const downloadButtonFinishedText = "Download started!";
-const timelineLocalStorageKey = "_garygurlaskie_com_timelines";
+const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
+const DEFAULT_WIDTH = 800;
+const DEFAULT_USE_DATE_LABELS = true;
+const DEFAULT_FONT = 'sans-serif';
+const DEFAULT_GRID_TICKS = 20;
+const LINK_COLOR = '#3c5ca2';
 
-downloadButton.onclick = async e => {
-    const setText = (text) => {
-        downloadButton.innerText = text;
-    };
-    e.preventDefault();
-    setText(downloadButtonActiveText);
-    await downloadPng();
-    await sleep(200);
-    setText(downloadButtonFinishedText);
-    setTimeout(() => setText(downloadButtonDefaultText), 1000);
-}
-
-clipboardButton.onclick = async e => {
-    const setText = (text) => {
-        clipboardButton.innerText = text;
-    };
-    e.preventDefault();
-    setText(clipboardButtonActiveText);
-    await copyPngToClipboard();
-    await sleep(200);
-    setText(clipboardButtonFinishedText);
-    setTimeout(() => setText(clipboardButtonDefaultText), 1400);
-}
-
-var timeline = {
+let _debugGlobalMonacoEditor;
+let _lastKnownJson = null;
+let _timeline = {
     title: 'Project A',
     config: {
         dateLabels: true,
         width: 800,
         font: 'sans-serif',
-        palette: {
-            gradient: ["#444", "#8a0"]
-        }
+        palette: { gradient: ['#3c5ca2', '#1b8961'] }
     },
     swimlanes: [
-        {
-            id: '1',
-            name: 'Coding Tasks',
-        },
-        {
-            id: '2',
-            name: 'Non-coding tasks',
-        },
-        {
-            id: '3',
-            name: 'Dependencies',
-        }
+        { id: '1', name: 'Coding Tasks' },
+        { id: '2', name: 'Non-coding tasks' },
+        { id: '3', name: 'Personal Leave' }
     ],
     tasks: [
         {
             name: 'Create Widgets',
-            interval: {
-                start: '2023-10-01',
-                end: '2023-10-05',
-            },
-            swimlaneId: '1',
+            interval: { start: '2023-09-27', end: '2023-10-01' },
+            swimlaneId: '1'
         },
         {
             name: 'Implement Widget Factory',
-            interval: {
-                start: '2023-10-10',
-                end: '2023-10-15',
-            },
-            swimlaneId: '1',
+            interval: { start: '2023-10-01', end: '2023-10-05' },
+            swimlaneId: '1'
         },
         {
-            name: 'Refactor Widget Manager Factory',
-            interval: {
-                start: '2023-09-27',
-                end: '2023-10-11',
-            },
-            swimlaneId: '1',
+            name: 'Implement Widget Factory Manager',
+            interval: { start: '2023-10-10', end: '2023-10-15' },
+            swimlaneId: '1'
         },
         {
-            name: 'Attend meetings',
-            interval: {
-                start: '2023-10-02',
-                end: '2023-10-20',
-            },
-            swimlaneId: '2',
+            name: 'Send and Receive Emails',
+            interval: { start: '2023-09-28', end: '2023-10-27' },
+            swimlaneId: '2'
         },
         {
-            name: 'Wait for other people',
-            interval: {
-                start: '2023-09-28',
-                end: '2023-10-27',
-            },
-            swimlaneId: '3',
+            name: 'Design Reviews',
+            interval: { start: '2023-10-02', end: '2023-10-17' },
+            swimlaneId: '2'
         },
+        {
+            name: 'International Management Olympiad',
+            interval: { start: '2023-10-10', end: '2023-10-16' },
+            swimlaneId: '3'
+        },
+        {
+            name: 'Basket-Weaving National Finals (BWNF)',
+            interval: { start: '2023-10-12', end: '2023-10-30' },
+            swimlaneId: '3'
+        },
+        {
+            name: 'Hoop Jumping Regionals',
+            interval: { start: '2023-10-25', end: '2023-10-28' },
+            swimlaneId: '3'
+        }
     ]
+};
+
+setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
+setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
+const isLocalStorageEnabled = setupFourStateToggle(
+    localStorageCheckbox,
+    localStorageCheckboxLabel,
+    readFromLocalStorage()[0],
+    ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
+    [LINK_COLOR, "grey", "grey", LINK_COLOR],
+    async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
+
+/**
+ * @param {HTMLInputElement} checkboxElt 
+ * @param {HTMLLabelElement} labelElt
+ * @param {boolean} initialValue
+ * @param {[string, string, string, string]} labels 
+ * @param {[string, string, string, string]} textColors
+ * @param {(boolean) => Promise} action
+*/
+function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textColors, action) {
+    labels = labels.slice();
+    const setText = (idx) => {
+        labelElt.innerText = labels[idx];
+        labelElt.style.color = textColors[idx];
+    };
+    const updateState = async () => {
+        const checked = checkboxElt.checked;
+        await action(checked);
+        setText(checked ? 3 : 1);
+        setTimeout(() => setText(checked ? 0 : 2), 500);
+    }
+
+    checkboxElt.checked = initialValue;
+    setText(initialValue ? 0 : 2);
+    labelElt.onclick = async e => {
+        e.preventDefault();
+        checkboxElt.checked = !checkboxElt.checked;
+        await updateState()
+    }
+    checkboxElt.onchange = async e => {
+        e.preventDefault();
+        await updateState();
+    }
+    return () => checkboxElt.checked;
 }
 
-/** @param {Date} date */
-function dateToIso(date) {
-    return date.toISOString().split('T')[0];
-}
-
-function addDays(date, days) {
-    const ret = new Date(date);
-    ret.setDate(ret.getDate() + days);
-    return ret;
-}
-
-function diffDays(date1, date2) {
-    return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
+/**
+* 
+* @param {HTMLElement} button 
+* @param {[string, string, string]} labels 
+* @param {() => Promise} action 
+*/
+function setupThreeStateButton(button, labels, action) {
+    labels = labels.slice();
+    const originalColor = button.style.color;
+    const originalTextDecoration = button.style.textDecoration;
+    const originalCursor = button.style.cursor;
+    const setText = (idx) => {
+        button.innerText = labels[idx];
+        if (idx == 0) {
+            button.style.textDecoration = originalTextDecoration;
+            button.style.color = originalColor;
+            button.style.cursor = originalCursor;
+        }
+        else {
+            button.style.textDecoration = "none";
+            button.style.color = "grey";
+            button.style.cursor = "default";
+        }
+    };
+    button.onclick = async e => {
+        e.preventDefault();
+        setText(1);
+        await action();
+        await sleep(200);
+        setText(2);
+        setTimeout(() => setText(0), 1000);
+    }
+    setText(0);
 }
 
 function assertTimelineValid(timeline) {
@@ -184,31 +218,34 @@ const standardizeColor = ((() => {
 /** @returns {Promise<HTMLCanvasElement>} */
 async function renderAsCanvas() {
     return new Promise((resolve) => {
-        const svg = renderTimeline(timeline).node();
-        const width = svg.width.baseVal.value;
-        const height = svg.height.baseVal.value;
-        var svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
+        const svg = renderTimeline(_timeline).node();
+        const width = svg.width.baseVal.value * 2;
+        const height = svg.height.baseVal.value * 2;
+        const paddingX = 40;
+        const paddingY = 40;
+        const svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         const loader = new Image();
         loader.width = width;
         loader.height = height;
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = width + 2 * paddingX;
+        canvas.height = height + 2 * paddingY;
 
-        loader.onload = function () {
-            context.drawImage(loader, 0, 0, loader.width, loader.height);
+        loader.onload = () => {
+            context.fillStyle = "white";
+            context.fillRect(0, 0, width + 2 * paddingX, height + 2 * paddingY);
+            context.drawImage(loader, paddingX, paddingY, width, height);
             resolve(canvas);
         };
-
         loader.src = 'data:image/svg+xml,' + encodeURIComponent(svgAsXML);
     });
 };
 
 // https://stackoverflow.com/a/15832662
 function downloadUri(uri, name) {
-    var link = document.createElement("a");
+    const link = document.createElement("a");
     link.download = name;
     link.href = uri;
     document.body.appendChild(link);
@@ -219,7 +256,7 @@ function downloadUri(uri, name) {
 
 async function downloadPng() {
     const canvas = await renderAsCanvas();
-    downloadUri(canvas.toDataURL(), `${timeline.title}.timeline.${dateToIso(new Date())}.png`);
+    downloadUri(canvas.toDataURL(), `${_timeline.title}.timeline.${dateToIso(new Date())}.png`);
 }
 
 // https://stackoverflow.com/a/59162806
@@ -237,13 +274,44 @@ async function copyPngToClipboard() {
 
 /** @param {string} json */
 function writeToLocalStorage(json) {
-    window.localStorage.setItem(timelineLocalStorageKey, json);
+    if (isLocalStorageEnabled()) {
+        window.localStorage.setItem(TIMELINE_LOCAL_STORAGE_KEY, json);
+    }
+    _lastKnownJson = json;
 }
 
 /** @returns {[boolean, string?]} (exists, value) */
 function readFromLocalStorage() {
-    const json = window.localStorage.getItem(timelineLocalStorageKey);
+    const json = window.localStorage.getItem(TIMELINE_LOCAL_STORAGE_KEY);
     return [json !== null, json];
+}
+
+function clearLocalStorage() {
+    window.localStorage.removeItem(TIMELINE_LOCAL_STORAGE_KEY);
+}
+
+function initLocalStorage() {
+    if (_lastKnownJson !== null) {
+        writeToLocalStorage(_lastKnownJson);
+    }
+    else {
+        writeToLocalStorage(JSON.stringify(_timeline, null, 2));
+    }
+}
+
+/** @param {Date} date */
+function dateToIso(date) {
+    return date.toISOString().split('T')[0];
+}
+
+function addDays(date, days) {
+    const ret = new Date(date);
+    ret.setDate(ret.getDate() + days);
+    return ret;
+}
+
+function diffDays(date1, date2) {
+    return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
 }
 
 function getDateRangeText(start, end) {
@@ -303,10 +371,7 @@ function colorToRgb(hex) {
     ].map(c => parseInt(c, 16));
 }
 
-/**
- * @param {RGBColor} rgb 
- * @returns 
- */
+/** @param {RGBColor} rgb */
 function rgbToColor(rgb) {
     return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
@@ -344,10 +409,11 @@ function interpolateColor(start, end, t) {
     ];
 }
 
-const DEFAULT_WIDTH = 800;
-const DEFAULT_USE_DATE_LABELS = true;
-const DEFAULT_FONT = 'sans-serif';
 
+
+/**
+ * @param {typeof _timeline} rawTimeline 
+ */
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
 
@@ -386,7 +452,8 @@ function renderTimeline(rawTimeline) {
     const taskLabelTextColor = "#000";
     const swimlaneLabelTextColor = "#fff";
     const taskDateLabelTextColor = "#555";
-    const xAxisGridColor = "#ddd";
+    const xAxisGridColor = "#d0dce0";
+    const xAxisGridTicks = parseIntOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
     const swimlanePadding = 5;
     const titleTextSize = timeline.title ? 16 : 0;
     const titlePaddingTop = timeline.title ? 8 : 0;
@@ -429,14 +496,17 @@ function renderTimeline(rawTimeline) {
     let cumulativeTaskIndex = 0
     const perSwimlaneTasks = timeline.swimlanes
         .map((swimlane, swimlaneIndex, allSwimlanes) => {
-            swimlane = { ...swimlane };
-            if (!swimlane.color && hasGradient) {
-                const t = swimlaneIndex * 1.0 / allSwimlanes.length;
+            let colorToUse = swimlane.color;
+            if (!colorToUse && hasGradient) {
+                const t = swimlaneIndex * 1.0 / (allSwimlanes.length - 0.99);
                 const rgb = interpolateColor(gradientStart, gradientEnd, t);
-                swimlane.color = rgbToColor(rgb);
+                colorToUse = rgbToColor(rgb);
             }
 
-            return swimlane;
+            return {
+                ...swimlane,
+                color: colorToUse
+            };
         })
         .map((swimlane, swimlaneIndex) => {
             const tasks = timeline.tasks
@@ -481,7 +551,7 @@ function renderTimeline(rawTimeline) {
         .range([chartMarginLeft, width - chartMarginRight])
 
     const xAxisGrid = svg.selectAll('line.horizontalGrid')
-        .data(dateScale.ticks(20))
+        .data(dateScale.ticks(xAxisGridTicks))
         .enter()
         .append("line")
         .attr("x1", d => dateScale(d))
@@ -585,13 +655,21 @@ function renderTimeline(rawTimeline) {
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("text-anchor", "middle")
         .attr("font-family", font)
-        .attr("fill", swimlaneLabelTextColor)
+        .attr("fill", d => {
+            // ensure enough contrast
+            // rendering is low scale enough, OK to hit Canvas API
+            const rgb = colorToRgb(d.color);
+            if (rgb[0] + rgb[1] + rgb[2] < (255 * 1.6)) {
+                return "white";
+            }
+            return rgbToColor(interpolateColor(rgb, colorToRgb("black"), 0.8));
+        });
 
     return svg;
 }
 
 function rerenderTimeline() {
-    const svg = renderTimeline(timeline);
+    const svg = renderTimeline(_timeline);
     while (container.firstChild) {
         container.removeChild(container.lastChild);
     }
@@ -599,10 +677,9 @@ function rerenderTimeline() {
 }
 
 
-var _debugGlobalMonacoEditor;
 function initializeMonacoEditorAsynchronously(initialJson, onRender) {
-    timeline = JSON.parse(initialJson);
-    
+    _timeline = JSON.parse(initialJson);
+
     require.config({ paths: { vs: 'monaco-editor/min/vs' } });
     require(['vs/editor/editor.main'], () => {
         const editor = monaco.editor.create(monacoContainer, {
@@ -615,7 +692,7 @@ function initializeMonacoEditorAsynchronously(initialJson, onRender) {
         editor.getModel().onDidChangeContent(() => {
             const json = editor.getModel().createSnapshot().read();
             try {
-                timeline = JSON.parse(json);
+                _timeline = JSON.parse(json);
                 rerenderTimeline();
                 onRender(json);
             }
@@ -628,7 +705,7 @@ function initializeMonacoEditorAsynchronously(initialJson, onRender) {
 
 function main() {
     const [exists, storedJson] = readFromLocalStorage();
-    const jsonToUse = exists ? storedJson : JSON.stringify(timeline, null, 2)
+    const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2)
     initializeMonacoEditorAsynchronously(jsonToUse, renderedJson => writeToLocalStorage(renderedJson));
     rerenderTimeline();
 }
