@@ -89,13 +89,13 @@ let _timeline = {
             swimlaneId: '3'
         },
         {
-            name: 'Basket-Weaving National Finals (BWNF)',
+            name: 'Hoop Jumping Regionals',
             interval: { start: '2023-10-12', end: '2023-10-30' },
             swimlaneId: '3'
         },
         {
-            name: 'Hoop Jumping Regionals',
-            interval: { start: '2023-10-25', end: '2023-10-28' },
+            name: 'Basket-Weaving National Finals (BWNF)',
+            interval: { start: '2023-10-21', end: '2023-10-25' },
             swimlaneId: '3'
         }
     ]
