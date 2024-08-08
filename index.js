@@ -31,6 +31,7 @@ const clipboardButtonFinishedText = "Copied!";
 const downloadButtonDefaultText = "Download PNG";
 const downloadButtonActiveText = "...";
 const downloadButtonFinishedText = "Download started!";
+const timelineLocalStorageKey = "_garygurlaskie_com_timelines";
 
 downloadButton.onclick = async e => {
     const setText = (text) => {
@@ -232,6 +233,17 @@ async function copyPngToClipboard() {
     } catch (error) {
         console.error(error);
     }
+}
+
+/** @param {string} json */
+function writeToLocalStorage(json) {
+    window.localStorage.setItem(timelineLocalStorageKey, json);
+}
+
+/** @returns {[boolean, string?]} (exists, value) */
+function readFromLocalStorage() {
+    const json = window.localStorage.getItem(timelineLocalStorageKey);
+    return [json !== null, json];
 }
 
 function getDateRangeText(start, end) {
@@ -588,11 +600,13 @@ function rerenderTimeline() {
 
 
 var _debugGlobalMonacoEditor;
-function initializeMonacoEditorAsynchronously() {
+function initializeMonacoEditorAsynchronously(initialJson, onRender) {
+    timeline = JSON.parse(initialJson);
+    
     require.config({ paths: { vs: 'monaco-editor/min/vs' } });
     require(['vs/editor/editor.main'], () => {
         const editor = monaco.editor.create(monacoContainer, {
-            value: JSON.stringify(timeline, null, 2),
+            value: initialJson,
             language: 'json',
             minimap: { enabled: false },
         });
@@ -600,14 +614,22 @@ function initializeMonacoEditorAsynchronously() {
 
         editor.getModel().onDidChangeContent(() => {
             const json = editor.getModel().createSnapshot().read();
-            timeline = JSON.parse(json);
-            rerenderTimeline();
+            try {
+                timeline = JSON.parse(json);
+                rerenderTimeline();
+                onRender(json);
+            }
+            catch (e) {
+                console.warn("Exception while rendering timeline:", e);
+            }
         });
     });
 }
 
 function main() {
-    initializeMonacoEditorAsynchronously();
+    const [exists, storedJson] = readFromLocalStorage();
+    const jsonToUse = exists ? storedJson : JSON.stringify(timeline, null, 2)
+    initializeMonacoEditorAsynchronously(jsonToUse, renderedJson => writeToLocalStorage(renderedJson));
     rerenderTimeline();
 }
 
