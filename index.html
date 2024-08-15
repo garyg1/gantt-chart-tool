@@ -84,21 +84,6 @@
     <script src="z3-built/z3-built.js"></script>
     <script src="z3-built/main.js"></script>
     <script src="./index.js"></script>
-    <script>
-        async function run() {
-            const z3 = await loadz3();
-            const { Solver, Int, And } = new z3.Context('main');
-            const x = Int.const('x');
-            const y = Int.const('y');
-            const solver = new Solver();
-            solver.add(And(x.ge(0), x.le(3)));
-            solver.add(And(y.ge(2), y.le(2)));
-            solver.add(x.gt(y));
-            console.log(await solver.check());
-            const model = solver.model();
-            console.log(model.eval(x).toString(), model.eval(y).toString());
-        }
-    </script>
 </body>
 
 </html>

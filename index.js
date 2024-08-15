@@ -50,53 +50,46 @@ let _timeline = {
         dateLabels: true,
         width: 800,
         font: 'sans-serif',
-        palette: { gradient: ['#3c5ca2', '#1b8961'] }
+        palette: { gradient: ['#3c5ca2', '#1b8961'] },
+        startDate: '2024-08-15',
     },
     swimlanes: [
-        { id: '1', name: 'Coding Tasks' },
-        { id: '2', name: 'Non-coding tasks' },
-        { id: '3', name: 'Personal Leave' }
+        { id: '1', name: 'Coding Tasks', maxParallelism: 2 }
     ],
     tasks: [
         {
             name: 'Create Widgets',
-            interval: { start: '2023-09-27', end: '2023-10-01' },
+            duration: 'PT5D',
             swimlaneId: '1'
         },
         {
             name: 'Implement Widget Factory',
-            interval: { start: '2023-10-01', end: '2023-10-05' },
+            duration: 'PT10D',
+            deps: ['Create Widgets'],
             swimlaneId: '1'
         },
         {
             name: 'Implement Widget Factory Manager',
-            interval: { start: '2023-10-10', end: '2023-10-15' },
+            duration: 'PT15D',
+            deps: ['Implement Widget Factory'],
             swimlaneId: '1'
         },
         {
-            name: 'Send and Receive Emails',
-            interval: { start: '2023-09-28', end: '2023-10-27' },
-            swimlaneId: '2'
+            name: 'Implement Widget Factory #2',
+            duration: 'PT10D',
+            deps: ['Create Widgets'],
+            swimlaneId: '1'
         },
         {
-            name: 'Design Reviews',
-            interval: { start: '2023-10-02', end: '2023-10-17' },
-            swimlaneId: '2'
+            name: 'Implement Widget Factory #3',
+            duration: 'PT5D',
+            deps: ['Create Widgets'],
+            swimlaneId: '1'
         },
         {
-            name: 'International Management Olympiad',
-            interval: { start: '2023-10-10', end: '2023-10-16' },
-            swimlaneId: '3'
-        },
-        {
-            name: 'Hoop Jumping Regionals',
-            interval: { start: '2023-10-12', end: '2023-10-30' },
-            swimlaneId: '3'
-        },
-        {
-            name: 'Basket-Weaving National Finals (BWNF)',
-            interval: { start: '2023-10-21', end: '2023-10-25' },
-            swimlaneId: '3'
+            name: 'Task 4',
+            interval: { start: '2024-08-25', end: '2024-09-16' },
+            swimlaneId: '1'
         }
     ]
 };
@@ -679,8 +672,9 @@ function renderTimeline(rawTimeline) {
     return svg;
 }
 
-function rerenderTimeline() {
-    const svg = renderTimeline(_timeline);
+async function rerenderTimeline() {
+    const timeline = await scheduleTasks(_timeline);
+    const svg = renderTimeline(timeline);
     while (container.firstChild) {
         container.removeChild(container.lastChild);
     }
@@ -723,3 +717,148 @@ function main() {
 
 
 main();
+
+/**
+ * @param {string} duration 
+ */
+function parseDuration(duration) {
+    const matches = [...duration.matchAll('PT([0-9]+)D')];
+    if (matches.length != 1) {
+        throw new Exception('Invalid duration: ' + duration);
+    }
+    return parseInt(matches[0][1]);
+}
+
+/**
+ * 
+ * @param {string} start 
+ * @param {string} end 
+ */
+function getDuration(start, end) {
+    return diffDays(new Date(start), new Date(end));
+}
+
+function zeroArray(length) {
+    const arr = [];
+    for (let i = 0; i < length; i++) {
+        arr.push(0);
+    }
+    return arr;
+}
+
+/**
+ * @param {typeof _timeline} timeline 
+ */
+async function scheduleTasks(timeline) {
+    const baseDate = new Date(timeline.config.startDate);
+    const tasks = timeline.tasks.map((t, i) => ({
+        ...t,
+        durationDays: t.duration
+            ? parseDuration(t.duration)
+            : getDuration(t.interval.start, t.interval.end),
+        fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
+        fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
+        globalIndex: i,
+    }));
+    const z3 = await loadz3();
+    const c = new z3.Context('main');
+    const solver = new c.Solver();
+
+    const lengthDays = c.Int.const('lengthDays');
+    solver.add(c.LE(lengthDays, 45))
+
+    const makeVar = (...args) => args.join('_');
+    const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
+    const noOverlap = ([start1, end1], [start2, end2]) => c.Or(
+        c.GT(start1, end2),
+        c.GT(start2, end1),
+    );
+    const swimlaneIndex = (task) => timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
+
+    const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'start')));
+    const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'end')));
+    const til_present = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+    const til_present_int = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+    const til_start = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+    const til_end = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+    for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        if (task.fixedStartDateDays) {
+            solver.add(c.And(
+                c.Eq(ti_start[i], task.fixedStartDateDays),
+                c.Eq(ti_end[i], task.fixedEndDateDays)));
+        }
+        else {
+            solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
+            solver.add(c.GE(ti_start[i], 0));
+
+            for (const d of (task.deps || [])) {
+                const j = getTaskIdx(d);
+                solver.add(c.GT(ti_start[i], ti_end[j]));
+            }
+
+            solver.add(c.LE(ti_end[i], lengthDays));
+        }
+
+        const s = swimlaneIndex(task);
+        const swimlane = timeline.swimlanes[s];
+        const presence = [];
+        for (let l = 0; l < swimlane.maxParallelism; l++) {
+            til_present[s][l][i] = c.Bool.const(makeVar(task, i, l, 'present'));
+            til_start[s][l][i] = c.Int.const(makeVar(task, i, l, 'start'));
+            til_end[s][l][i] = c.Int.const(makeVar(task, i, l, 'end'));
+            console.log(til_present[s][l][i]);
+
+            solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_start[s][l][i], ti_start[i])));
+            solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_end[s][l][i], ti_end[i])));
+
+            presence.push(c.If(til_present[s][l][i], 1, 0));
+            til_present_int[s][l][i] = c.Int.const(makeVar(task, i, l, 'pint'));
+            solver.add(c.Eq(til_present_int[s][l][i], c.If(til_present[s][l][i], 1, 0)));
+        }
+        solver.add(c.Eq(c.Sum(...presence), 1));
+    }
+
+    for (let s = 0; s < til_present.length; s++) {
+        const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
+        for (const t1 of sTasks) {
+            for (const t2 of sTasks) {
+                if (t1.globalIndex === t2.globalIndex) {
+                    continue;
+                }
+
+                for (let l = 0; l < til_present[s].length; l++) {
+                    const t_present = til_present[s][l];
+                    const t_start = til_start[s][l];
+                    const t_end = til_end[s][l];
+                    solver.add(
+                        c.Implies(
+                            c.And(
+                                c.Eq(true, t_present[t1.globalIndex]),
+                                c.Eq(true, t_present[t2.globalIndex]),
+                            ),
+                            noOverlap(
+                                [t_start[t1.globalIndex], t_end[t1.globalIndex]],
+                                [t_start[t2.globalIndex], t_end[t2.globalIndex]])
+                        ));
+
+                }
+            }
+        }
+    }
+
+    console.log(await solver.check());
+    const model = solver.model();
+    const starts = ti_start.map(x => model.eval(x).value()).map(Number);
+    const ends = ti_end.map(x => model.eval(x).value()).map(Number);
+
+    return {
+        ...timeline,
+        tasks: timeline.tasks.map((t, i) => ({
+            ...t,
+            interval: { start: addDays(baseDate, starts[i]), end: addDays(baseDate, ends[i]) }
+        }))
+    };
+}
+
+scheduleTasks(_timeline);
