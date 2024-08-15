@@ -746,6 +746,11 @@ function zeroArray(length) {
     return arr;
 }
 
+function timer() {
+    const t0 = new Date();
+    return () => new Date() - t0;
+}
+
 /**
  * @param {typeof _timeline} timeline 
  */
@@ -762,103 +767,120 @@ async function scheduleTasks(timeline) {
     }));
     const z3 = await loadz3();
     const c = new z3.Context('main');
-    const solver = new c.Solver();
 
-    const lengthDays = c.Int.const('lengthDays');
-    solver.add(c.LE(lengthDays, 45))
+    function getSolver() {
+        const solver = new c.Optimize();
+        const lengthDays = c.Int.const('lengthDays');
+        solver.minimize(lengthDays);
 
-    const makeVar = (...args) => args.join('_');
-    const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
-    const noOverlap = ([start1, end1], [start2, end2]) => c.Or(
-        c.GT(start1, end2),
-        c.GT(start2, end1),
-    );
-    const swimlaneIndex = (task) => timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
+        const makeVar = (...args) => args.join('_');
+        const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
+        const noOverlap = ([start1, end1], [start2, end2]) => c.Or(
+            c.GT(start1, end2),
+            c.GT(start2, end1),
+        );
+        const swimlaneIndex = (task) => timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
 
-    const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'start')));
-    const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'end')));
-    const til_present = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
-    const til_present_int = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
-    const til_start = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
-    const til_end = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
-    for (let i = 0; i < tasks.length; i++) {
-        const task = tasks[i];
-        if (task.fixedStartDateDays) {
-            solver.add(c.And(
-                c.Eq(ti_start[i], task.fixedStartDateDays),
-                c.Eq(ti_end[i], task.fixedEndDateDays)));
-        }
-        else {
-            solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
-            solver.add(c.GE(ti_start[i], 0));
-
-            for (const d of (task.deps || [])) {
-                const j = getTaskIdx(d);
-                solver.add(c.GT(ti_start[i], ti_end[j]));
+        const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'start')));
+        const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'end')));
+        const til_present = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+        const til_present_int = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+        const til_start = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+        const til_end = timeline.swimlanes.map(s => zeroArray(s.maxParallelism).map(_ => ({})));
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            if (task.fixedStartDateDays) {
+                solver.add(c.And(
+                    c.Eq(ti_start[i], task.fixedStartDateDays),
+                    c.Eq(ti_end[i], task.fixedEndDateDays)));
             }
+            else {
+                solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
+                solver.add(c.GE(ti_start[i], 0));
 
-            solver.add(c.LE(ti_end[i], lengthDays));
-        }
-
-        const s = swimlaneIndex(task);
-        const swimlane = timeline.swimlanes[s];
-        const presence = [];
-        for (let l = 0; l < swimlane.maxParallelism; l++) {
-            til_present[s][l][i] = c.Bool.const(makeVar(task, i, l, 'present'));
-            til_start[s][l][i] = c.Int.const(makeVar(task, i, l, 'start'));
-            til_end[s][l][i] = c.Int.const(makeVar(task, i, l, 'end'));
-            console.log(til_present[s][l][i]);
-
-            solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_start[s][l][i], ti_start[i])));
-            solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_end[s][l][i], ti_end[i])));
-
-            presence.push(c.If(til_present[s][l][i], 1, 0));
-            til_present_int[s][l][i] = c.Int.const(makeVar(task, i, l, 'pint'));
-            solver.add(c.Eq(til_present_int[s][l][i], c.If(til_present[s][l][i], 1, 0)));
-        }
-        solver.add(c.Eq(c.Sum(...presence), 1));
-    }
-
-    for (let s = 0; s < til_present.length; s++) {
-        const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
-        for (const t1 of sTasks) {
-            for (const t2 of sTasks) {
-                if (t1.globalIndex === t2.globalIndex) {
-                    continue;
+                for (const d of (task.deps || [])) {
+                    const j = getTaskIdx(d);
+                    solver.add(c.GT(ti_start[i], ti_end[j]));
                 }
 
-                for (let l = 0; l < til_present[s].length; l++) {
-                    const t_present = til_present[s][l];
-                    const t_start = til_start[s][l];
-                    const t_end = til_end[s][l];
-                    solver.add(
-                        c.Implies(
-                            c.And(
-                                c.Eq(true, t_present[t1.globalIndex]),
-                                c.Eq(true, t_present[t2.globalIndex]),
-                            ),
-                            noOverlap(
-                                [t_start[t1.globalIndex], t_end[t1.globalIndex]],
-                                [t_start[t2.globalIndex], t_end[t2.globalIndex]])
-                        ));
+                solver.add(c.LE(ti_end[i], lengthDays));
+            }
 
+            const s = swimlaneIndex(task);
+            const swimlane = timeline.swimlanes[s];
+            const presence = [];
+            for (let l = 0; l < swimlane.maxParallelism; l++) {
+                til_present[s][l][i] = c.Bool.const(makeVar(task, i, l, 'present'));
+                til_start[s][l][i] = c.Int.const(makeVar(task, i, l, 'start'));
+                til_end[s][l][i] = c.Int.const(makeVar(task, i, l, 'end'));
+
+                solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_start[s][l][i], ti_start[i])));
+                solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_end[s][l][i], ti_end[i])));
+
+                presence.push(c.If(til_present[s][l][i], 1, 0));
+                til_present_int[s][l][i] = c.Int.const(makeVar(task, i, l, 'pint'));
+                solver.add(c.Eq(til_present_int[s][l][i], c.If(til_present[s][l][i], 1, 0)));
+            }
+            solver.add(c.Eq(c.Sum(...presence), 1));
+        }
+
+        for (let s = 0; s < til_present.length; s++) {
+            const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
+            for (const t1 of sTasks) {
+                for (const t2 of sTasks) {
+                    if (t1.globalIndex === t2.globalIndex) {
+                        continue;
+                    }
+
+                    for (let l = 0; l < til_present[s].length; l++) {
+                        const t_present = til_present[s][l];
+                        const t_start = til_start[s][l];
+                        const t_end = til_end[s][l];
+                        solver.add(
+                            c.Implies(
+                                c.And(
+                                    c.Eq(true, t_present[t1.globalIndex]),
+                                    c.Eq(true, t_present[t2.globalIndex]),
+                                ),
+                                noOverlap(
+                                    [t_start[t1.globalIndex], t_end[t1.globalIndex]],
+                                    [t_start[t2.globalIndex], t_end[t2.globalIndex]])
+                            ));
+
+                    }
                 }
             }
         }
+
+        return [solver, ti_start, ti_end];
+    }
+    
+    const [solver, ti_start, ti_end] = getSolver();
+    async function solve() {
+        const logTime = timer();
+        console.log('configuring solver', logTime());
+
+        console.log('running solver...', logTime());
+        const result = await solver.check();
+
+        console.log(result, logTime());
+        if (result == 'unsat') {
+            return null;
+        }
+        const model = solver.model();
+        const starts = ti_start.map(x => model.eval(x).value()).map(Number);
+        const ends = ti_end.map(x => model.eval(x).value()).map(Number);
+
+        console.log(starts, ends);
+
+        return {
+            ...timeline,
+            tasks: timeline.tasks.map((t, i) => ({
+                ...t,
+                interval: { start: addDays(baseDate, starts[i]), end: addDays(baseDate, ends[i]) }
+            }))
+        };
     }
 
-    console.log(await solver.check());
-    const model = solver.model();
-    const starts = ti_start.map(x => model.eval(x).value()).map(Number);
-    const ends = ti_end.map(x => model.eval(x).value()).map(Number);
-
-    return {
-        ...timeline,
-        tasks: timeline.tasks.map((t, i) => ({
-            ...t,
-            interval: { start: addDays(baseDate, starts[i]), end: addDays(baseDate, ends[i]) }
-        }))
-    };
+    return await solve();
 }
-
-scheduleTasks(_timeline);
