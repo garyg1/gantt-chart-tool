@@ -40,10 +40,12 @@ const DEFAULT_USE_DATE_LABELS = true;
 const DEFAULT_FONT = 'sans-serif';
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = '#3c5ca2';
+const START_DATE_ISO = dateToIso(new Date());
 
 let _debugGlobalMonacoEditor;
 let _mutated = false;
 let _lastKnownJson = null;
+let _scheduledTimeline = null;
 let _timeline = {
     title: 'Project A',
     config: {
@@ -51,48 +53,72 @@ let _timeline = {
         width: 800,
         font: 'sans-serif',
         palette: { gradient: ['#3c5ca2', '#1b8961'] },
-        startDate: '2024-08-15',
+        startDate: START_DATE_ISO,
     },
     swimlanes: [
-        { id: '1', name: 'Coding Tasks', maxParallelism: 2 }
+        { id: '1', name: 'A', maxParallelism: 2 },
+        { id: '2', name: 'B', maxParallelism: 2 },
+        { id: '3', name: 'C', maxParallelism: 3 },
     ],
     tasks: [
-        {
-            name: 'Create Widgets',
-            duration: 'PT5D',
-            swimlaneId: '1'
-        },
-        {
-            name: 'Implement Widget Factory',
-            duration: 'PT10D',
-            deps: ['Create Widgets'],
-            swimlaneId: '1'
-        },
-        {
-            name: 'Implement Widget Factory Manager',
-            duration: 'PT15D',
-            deps: ['Implement Widget Factory'],
-            swimlaneId: '1'
-        },
-        {
-            name: 'Implement Widget Factory #2',
-            duration: 'PT10D',
-            deps: ['Create Widgets'],
-            swimlaneId: '1'
-        },
-        {
-            name: 'Implement Widget Factory #3',
-            duration: 'PT5D',
-            deps: ['Create Widgets'],
-            swimlaneId: '1'
-        },
-        {
-            name: 'Task 4',
-            interval: { start: '2024-08-25', end: '2024-09-16' },
-            swimlaneId: '1'
-        }
+        ...MakeTaskDAG(['1', '2'], 5),
+        ...MakeTaskDAG(['1', '3'], 15),
+        ...MakeTaskDAG(['1', '3'], 10),
+        MakeFixedTask('Fixed Task 1A', '1'),
+        MakeFixedTask('Fixed Task 1B', '1'),
+        MakeFixedTask('Fixed Task 2A', '2'),
+        MakeFixedTask('Fixed Task 2B', '2'),
+        MakeFixedTask('Fixed Task 3A', '3'),
     ]
 };
+
+var _stream = 1;
+function MakeTaskDAG(swimlaneIds, numTasks) {
+    _stream = _stream || 1;
+    const streamName = `Stream ${_stream}`;
+    _stream += 1;
+    let taskIdx = 1;
+    const getName = () => `${streamName} Task ${taskIdx++}`;
+    const getSwimlane = () => randChoice(swimlaneIds);
+    const tasks = [
+        MakeFloatingTask(getName(), getSwimlane(), []),
+        MakeFloatingTask(getName(), getSwimlane(), []),
+        MakeFloatingTask(getName(), getSwimlane(), []),
+    ];
+
+
+    while (tasks.length < numTasks) {
+        const numParents = randChoice([0, 0, 0, 0, 1, 1, 2]);
+        const parentIdxes = [...new Set(zeroArray(numParents).map(_ => randRange(0, tasks.length)))];
+        tasks.push(MakeFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
+    }
+
+    return tasks;
+}
+
+function MakeFixedTask(name, swimlaneId) {
+    const startDays = randRange(1, 100);
+    const durationDays = randRange(4, 45);
+
+    return {
+        name,
+        swimlaneId,
+        interval: {
+            start: dateToIso(addDays(START_DATE_ISO, startDays)),
+            end: dateToIso(addDays(START_DATE_ISO, startDays + durationDays)),
+        }
+    };
+}
+
+function MakeFloatingTask(name, swimlaneId, deps) {
+    const durationDays = randRange(10, 25);
+    return {
+        name,
+        swimlaneId,
+        duration: `PT${durationDays}D`,
+        deps: deps || [],
+    };
+}
 
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
@@ -218,7 +244,7 @@ const standardizeColor = ((() => {
 /** @returns {Promise<HTMLCanvasElement>} */
 async function renderAsCanvas() {
     return new Promise((resolve) => {
-        const svg = renderTimeline(_timeline).node();
+        const svg = renderTimeline(_scheduledTimeline).node();
         const width = svg.width.baseVal.value * 2;
         const height = svg.height.baseVal.value * 2;
         const paddingX = 40;
@@ -411,6 +437,14 @@ function interpolateColor(start, end, t) {
         Math.max(0, Math.min(Math.round((1 - t) * start[1] + t * end[1]), 255)),
         Math.max(0, Math.min(Math.round((1 - t) * start[2] + t * end[2]), 255)),
     ];
+}
+
+function randRange(lo, hiExcl) {
+    return Math.floor(Math.random() * (hiExcl - lo) + lo);
+}
+
+function randChoice(arr) {
+    return arr[randRange(0, arr.length)];
 }
 
 
@@ -673,8 +707,8 @@ function renderTimeline(rawTimeline) {
 }
 
 async function rerenderTimeline() {
-    const timeline = await scheduleTasks(_timeline);
-    const svg = renderTimeline(timeline);
+    _scheduledTimeline = await scheduleTasks(_timeline);
+    const svg = renderTimeline(_scheduledTimeline);
     while (container.firstChild) {
         container.removeChild(container.lastChild);
     }
@@ -707,16 +741,6 @@ function initializeMonacoEditorAsynchronously(initialJson, onRender) {
         });
     });
 }
-
-function main() {
-    const [exists, storedJson] = readFromLocalStorage();
-    const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2)
-    initializeMonacoEditorAsynchronously(jsonToUse, renderedJson => writeToLocalStorage(renderedJson));
-    rerenderTimeline();
-}
-
-
-main();
 
 /**
  * @param {string} duration 
@@ -810,16 +834,19 @@ async function scheduleTasks(timeline) {
             const swimlane = timeline.swimlanes[s];
             const presence = [];
             for (let l = 0; l < swimlane.maxParallelism; l++) {
-                til_present[s][l][i] = c.Bool.const(makeVar(task, i, l, 'present'));
+                til_present[s][l][i] = c.Int.const(makeVar(task, i, l, 'present'));
+                solver.add(c.And(
+                    c.GE(til_present[s][l][i], 0),
+                    c.LE(til_present[s][l][i], 1)));
                 til_start[s][l][i] = c.Int.const(makeVar(task, i, l, 'start'));
                 til_end[s][l][i] = c.Int.const(makeVar(task, i, l, 'end'));
 
-                solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_start[s][l][i], ti_start[i])));
-                solver.add(c.Implies(c.Eq(til_present[s][l][i], true), c.Eq(til_end[s][l][i], ti_end[i])));
+                solver.add(c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_start[s][l][i], ti_start[i])));
+                solver.add(c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_end[s][l][i], ti_end[i])));
 
-                presence.push(c.If(til_present[s][l][i], 1, 0));
-                til_present_int[s][l][i] = c.Int.const(makeVar(task, i, l, 'pint'));
-                solver.add(c.Eq(til_present_int[s][l][i], c.If(til_present[s][l][i], 1, 0)));
+                presence.push(til_present[s][l][i]);
+                // til_present_int[s][l][i] = c.Int.const(makeVar(task, i, l, 'pint'));
+                // solver.add(c.Eq(til_present_int[s][l][i], til_present[s][l][i]));
             }
             solver.add(c.Eq(c.Sum(...presence), 1));
         }
@@ -839,8 +866,8 @@ async function scheduleTasks(timeline) {
                         solver.add(
                             c.Implies(
                                 c.And(
-                                    c.Eq(true, t_present[t1.globalIndex]),
-                                    c.Eq(true, t_present[t2.globalIndex]),
+                                    c.Eq(t_present[t1.globalIndex], 1),
+                                    c.Eq(t_present[t2.globalIndex], 1),
                                 ),
                                 noOverlap(
                                     [t_start[t1.globalIndex], t_end[t1.globalIndex]],
@@ -854,16 +881,17 @@ async function scheduleTasks(timeline) {
 
         return [solver, ti_start, ti_end];
     }
-    
-    const [solver, ti_start, ti_end] = getSolver();
+
     async function solve() {
         const logTime = timer();
-        console.log('configuring solver', logTime());
+        log('configuring solver', logTime());
+        const [solver, ti_start, ti_end] = getSolver();
+        solver.set("timeout", 10000);
 
-        console.log('running solver...', logTime());
+        log('running solver...', logTime());
         const result = await solver.check();
 
-        console.log(result, logTime());
+        log(result, logTime());
         if (result == 'unsat') {
             return null;
         }
@@ -871,7 +899,7 @@ async function scheduleTasks(timeline) {
         const starts = ti_start.map(x => model.eval(x).value()).map(Number);
         const ends = ti_end.map(x => model.eval(x).value()).map(Number);
 
-        console.log(starts, ends);
+        log(starts, ends);
 
         return {
             ...timeline,
@@ -884,3 +912,19 @@ async function scheduleTasks(timeline) {
 
     return await solve();
 }
+
+function log(...args) {
+    console.log(...args);
+}
+
+function main() {
+    log('running script');
+
+    const [exists, storedJson] = readFromLocalStorage();
+    const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2)
+    initializeMonacoEditorAsynchronously(jsonToUse, renderedJson => writeToLocalStorage(renderedJson));
+    rerenderTimeline();
+}
+
+
+main();
