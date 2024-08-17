@@ -46,43 +46,46 @@ const LINK_COLOR = '#3c5ca2';
 const START_DATE_ISO = dateToIso(new Date());
 
 let _z3 = null;
-let _overwriteText = null;
 let _debugGlobalMonacoEditor;
-let _mutated = false;
-let _lastKnownJson = null;
-let _scheduledTimeline = null;
+let _timeline = makeSampleTimeline();
+let _fontToLoad = null;
 let _globalTimeoutMs = 20000;
+let _lastKnownJson = null;
+let _mutated = false;
+var _generationStreamId = 1;
+let _overwriteText = null;
+let _renderNeeded = false;
+let _scheduledTimeline = null;
+let _hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
+const _triedFonts = new Set();
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
-let _timeline = {
-    title: 'Project A',
-    config: {
-        dateLabels: true,
-        width: 800,
-        font: 'sans-serif',
-        palette: { gradient: ['#3c5ca2', 'seagreen'] },
-        startDate: START_DATE_ISO,
-    },
-    swimlanes: [
-        { id: '1', name: 'A', maxParallelism: 2 },
-        { id: '2', name: 'B', maxParallelism: 2 },
-        { id: '3', name: 'C', maxParallelism: 2, hidden: false },
-    ],
-    tasks: [
-        ...makeTaskDAG(['1', '2'], 5),
-        ...makeTaskDAG(['1', '3'], 2),
-        ...makeTaskDAG(['2', '3'], 3),
-        makeFixedTask('Fixed Task 1A', '1'),
-        makeFixedTask('Fixed Task 1B', '1'),
-        makeFixedTask('Fixed Task 3A', '3'),
-    ]
-};
+// https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
+const _cssFontGenericNames = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong'];
 
-var _stream = 1;
+setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
+setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
+setupThreeStateButton(fixedIntervalsButton, ["Write Optimized Schedule", "...", "Written!"], writeOptimizedSchedule);
+
+const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout]
+    = setupStatus(statusField, ['Optimizing...', 'Rendering...', 'Rendered', 'Failed', `Timed out after ${_globalTimeoutMs / 1000} sec`]);
+
+const isLocalStorageEnabled = setupFourStateToggle(
+    localStorageCheckbox,
+    localStorageCheckboxLabel,
+    readFromLocalStorage()[0],
+    ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
+    [LINK_COLOR, "grey", "grey", LINK_COLOR],
+    async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
+
+/**
+ * @param {string[]} swimlaneIds
+ * @param {number} numTasks
+ */
 function makeTaskDAG(swimlaneIds, numTasks) {
-    _stream = _stream || 1;
-    const streamName = `Stream ${_stream}`;
-    _stream += 1;
+    _generationStreamId = _generationStreamId || 1;
+    const streamName = `Stream ${_generationStreamId}`;
+    _generationStreamId += 1;
     let taskIdx = 1;
     const getName = () => `${streamName} Task ${taskIdx++}`;
     const getSwimlane = () => randChoice(swimlaneIds);
@@ -90,7 +93,6 @@ function makeTaskDAG(swimlaneIds, numTasks) {
         makeFloatingTask(getName(), getSwimlane(), []),
         makeFloatingTask(getName(), getSwimlane(), []),
     ];
-
 
     while (tasks.length < numTasks) {
         const numParents = randChoice([0, 0, 0, 1, 1, 2]);
@@ -101,6 +103,10 @@ function makeTaskDAG(swimlaneIds, numTasks) {
     return tasks;
 }
 
+/**
+ * @param {string} name
+ * @param {string} swimlaneId
+ */
 function makeFixedTask(name, swimlaneId) {
     const startDays = randRange(1, 100);
     const durationDays = randRange(4, 45);
@@ -115,6 +121,11 @@ function makeFixedTask(name, swimlaneId) {
     };
 }
 
+/**
+ * @param {string} name
+ * @param {string} swimlaneId
+ * @param {string[]} deps
+ */
 function makeFloatingTask(name, swimlaneId, deps) {
     const durationDays = randRange(10, 25);
     const task = {
@@ -130,21 +141,31 @@ function makeFloatingTask(name, swimlaneId, deps) {
     return task;
 }
 
-setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
-setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
-setupThreeStateButton(fixedIntervalsButton, ["Write Optimized Schedule", "...", "Written!"], writeOptimizedSchedule);
-const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout]
-    = setupStatus(statusField, ['Optimizing...', 'Rendering...',
-        'Rendered', 'Failed',
-        `Timed out after ${_globalTimeoutMs / 1000} sec`
-    ]);
-const isLocalStorageEnabled = setupFourStateToggle(
-    localStorageCheckbox,
-    localStorageCheckboxLabel,
-    readFromLocalStorage()[0],
-    ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
-    [LINK_COLOR, "grey", "grey", LINK_COLOR],
-    async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
+function makeSampleTimeline() {
+    return {
+        title: 'Project A',
+        config: {
+            dateLabels: true,
+            width: 800,
+            font: 'sans-serif',
+            palette: { gradient: ['#3c5ca2', 'seagreen'] },
+            startDate: START_DATE_ISO,
+        },
+        swimlanes: [
+            { id: '1', name: 'A', maxParallelism: 2 },
+            { id: '2', name: 'B', maxParallelism: 2 },
+            { id: '3', name: 'C', maxParallelism: 2, hidden: false },
+        ],
+        tasks: [
+            ...makeTaskDAG(['1', '2'], 5),
+            ...makeTaskDAG(['1', '3'], 2),
+            ...makeTaskDAG(['2', '3'], 3),
+            makeFixedTask('Fixed Task 1A', '1'),
+            makeFixedTask('Fixed Task 1B', '1'),
+            makeFixedTask('Fixed Task 3A', '3'),
+        ]
+    };
+}
 
 /**
  * 
@@ -336,15 +357,14 @@ function addStylesheetWithUrl(url) {
     document.getElementsByTagName('head')[0].appendChild(link);
 }
 
-let _hasConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
 function getGFontConsent(fontName) {
-    if (_hasConsent === null) {
-        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the name of the font. Continue?`)
-        _hasConsent = `${result}`;
-        window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasConsent);
+    if (_hasGfontConsent === null) {
+        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`)
+        _hasGfontConsent = `${result}`;
+        window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
     }
 
-    return _hasConsent === 'true';
+    return _hasGfontConsent === 'true';
 }
 
 /**
@@ -379,8 +399,6 @@ function pollWithTimeout(action, timeoutMs) {
     });
 }
 
-let _fontToLoad = null;
-const _triedFonts = new Set();
 async function loadGoogleFont() {
     if (_fontToLoad === null || _triedFonts.has(_fontToLoad)) {
         _fontToLoad = null;
@@ -466,16 +484,25 @@ function dateToIso(date) {
     return date.toISOString().split('T')[0];
 }
 
+/** @param {number} days */
 function addDays(date, days) {
     const ret = new Date(date);
     ret.setDate(ret.getDate() + days);
     return ret;
 }
 
+/** 
+ * @param {Date} date1 
+ * @param {Date} date2
+ */
 function diffDays(date1, date2) {
     return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
 }
 
+/** 
+ * @param {Date} start 
+ * @param {Date} end
+ */
 function getDateRangeText(start, end) {
     const startText = start.toLocaleDateString('en-US', {
         month: 'short',
@@ -493,6 +520,10 @@ function getDateRangeText(start, end) {
     return `${startText} - ${endText}`;
 }
 
+/**
+ * @param {any} maybeInt
+ * @param {number} defaultIfNotInt
+ */
 function parseIntOrDefault(maybeInt, defaultIfNotInt) {
     if (typeof maybeInt === "number") {
         return maybeInt;
@@ -500,6 +531,10 @@ function parseIntOrDefault(maybeInt, defaultIfNotInt) {
     return defaultIfNotInt;
 }
 
+/**
+ * @param {any} maybeString
+ * @param {string} defaultIfNotString
+ */
 function parseStringOrDefault(maybeString, defaultIfNotString) {
     if (typeof maybeString === "string") {
         return maybeString;
@@ -507,6 +542,11 @@ function parseStringOrDefault(maybeString, defaultIfNotString) {
     return defaultIfNotString;
 }
 
+/**
+ * @param {any} maybeBool
+ * @param {boolean} defaultIfNotBool
+ * @returns {boolean}
+ */
 function parseBoolOrDefault(maybeBool, defaultIfNotBool) {
     if (maybeBool === true || maybeBool === false) {
         return maybeBool;
@@ -514,6 +554,10 @@ function parseBoolOrDefault(maybeBool, defaultIfNotBool) {
     return defaultIfNotBool;
 }
 
+/**
+ * @param {any} maybeDateString
+ * @param {Date} defaultIfNotDate
+ */
 function parseDateOrDefault(maybeDateString, defaultIfNotDate) {
     if (typeof maybeDateString === "string") {
         return new Date(maybeDateString);
@@ -579,16 +623,25 @@ function interpolateColor(start, end, t) {
     ];
 }
 
+/**
+ * @param {number} lo 
+ * @param {number} hiExcl 
+ */
 function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
 }
 
+/**
+ * @template T
+ * @param {T[]} arr
+ */
 function randChoice(arr) {
     return arr[randRange(0, arr.length)];
 }
 
 /**
  * @param {typeof _timeline} rawTimeline 
+ * @returns {d3.Selection<SVGElement, unknown, HTMLElement, any>}
  */
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
@@ -626,9 +679,9 @@ function renderTimeline(rawTimeline) {
         font = googleFont;
     }
 
-    // encode as CSS <family-name>
+    // if not a <generic-name>, encode as CSS <family-name> by quoting.
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
-    font = `"${font}"`;
+    font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
 
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
@@ -641,7 +694,6 @@ function renderTimeline(rawTimeline) {
     const taskHeight = 15;
     const taskPadding = 5;
     const taskLabelTextColor = "#000";
-    const swimlaneLabelTextColor = "#fff";
     const taskDateLabelTextColor = "#555";
     const xAxisGridColor = "#d0dce0";
     const xAxisGridTicks = parseIntOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
@@ -754,6 +806,7 @@ function renderTimeline(rawTimeline) {
     const xAxis = svg.append("g")
         .attr("transform", `translate(0, ${chartMarginTop})`)
         .call(d3.axisTop(dateScale))
+        .attr("font-family", font)
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
         const taskRects = svg.selectAll("taskbars")
@@ -859,8 +912,13 @@ function renderTimeline(rawTimeline) {
     return svg;
 }
 
-
-async function initializeMonacoEditorAsynchronously(initialJson, onRender) {
+/**
+ * 
+ * @param {string} initialJson 
+ * @param {(json: string) => { }} onAfterRender 
+ * @returns 
+ */
+async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) {
     _timeline = JSON.parse(initialJson);
 
     return new Promise((resolve) => {
@@ -897,7 +955,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onRender) {
                 try {
                     _timeline = JSON.parse(json);
                     rerenderTimeline();
-                    onRender(json);
+                    onAfterRender(json);
                 }
                 catch (e) {
                     console.warn("Exception while rendering timeline:", e);
@@ -925,7 +983,6 @@ function parseDuration(duration) {
 }
 
 /**
- * 
  * @param {string} start 
  * @param {string} end 
  */
@@ -933,6 +990,7 @@ function getDuration(start, end) {
     return diffDays(new Date(start), new Date(end));
 }
 
+/** @param {number} length */
 function zeroArray(length) {
     const arr = [];
     for (let i = 0; i < length; i++) {
@@ -946,6 +1004,10 @@ function timer() {
     return () => new Date() - t0;
 }
 
+/**
+ * @param {typeof _timeline.tasks} tasks
+ * @param {typeof _timeline.swimlanes} swimlanes
+ */
 function getCacheKey(tasks, swimlanes) {
     tasks = tasks.slice();
     swimlanes = swimlanes.slice();
@@ -1018,6 +1080,12 @@ async function scheduleTasks(timeline) {
 
     const c = new _z3.Context('main');
     function getSolver() {
+        // Modified version the constraint formulation of Job-Shop found in
+        // https://smt.st/SAT_SMT_by_example.pdf (Chapter 22.8)
+        // - binding/presence trick
+        // - modified to work with DAG dependencies (instead of linear jobs)
+        // - extended to handle "fixed" tasks (i.e., interruptions)
+
         const solver = new c.Optimize();
         const lengthDays = c.Int.const('lengthDays');
         solver.minimize(lengthDays);
@@ -1069,8 +1137,6 @@ async function scheduleTasks(timeline) {
                 solver.add(c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_end[s][l][i], ti_end[i])));
 
                 presence.push(til_present[s][l][i]);
-                // til_present_int[s][l][i] = c.Int.const(makeVar(task, i, l, 'pint'));
-                // solver.add(c.Eq(til_present_int[s][l][i], til_present[s][l][i]));
             }
             solver.add(c.Eq(c.Sum(...presence), task.width || 1));
         }
@@ -1147,7 +1213,9 @@ async function scheduleTasks(timeline) {
 }
 
 async function hackReloadWindowIfNeeded() {
-    // hack to reload page if SAB is undefined and coepWorker hasn't loaded
+    // last resort, and doesn't always work
+    // hack to reload page if SAB is `undefined` and coepWorker hasn't reloaded the page.
+    // TODO: fix coepWorker so this is not required.
     const sab = typeof SharedArrayBuffer === "undefined";
     const reload = window.sessionStorage.getItem("lastResortReload");
     if (sab && (reload === null || (new Date().getTime() - parseInt(reload) > 15000))) {
@@ -1157,7 +1225,6 @@ async function hackReloadWindowIfNeeded() {
     }
 }
 
-let _renderNeeded = false;
 function rerenderTimeline() {
     _renderNeeded = true;
 }
@@ -1166,7 +1233,6 @@ async function flushTimeline() {
     if (!_renderNeeded) {
         return;
     }
-
     _renderNeeded = false;
 
     await hackReloadWindowIfNeeded();
@@ -1231,7 +1297,5 @@ async function main() {
     initializeGoogleFontsWorker();
     rerenderTimeline();
 }
-
-
 
 main();
