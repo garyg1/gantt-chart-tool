@@ -66,17 +66,22 @@ const _cssFontGenericNames = ['serif', 'sans-serif', 'monospace', 'cursive', 'fa
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
 setupThreeStateButton(fixedIntervalsButton, ["Write Optimized Schedule", "...", "Written!"], writeOptimizedSchedule);
+
 const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout]
     = setupStatus(statusField, ['Optimizing...', 'Rendering...', 'Rendered', 'Failed', `Timed out after ${_globalTimeoutMs / 1000} sec`]);
-const isLocalStorageEnabled
-    = setupFourStateToggle(
-        localStorageCheckbox,
-        localStorageCheckboxLabel,
-        readFromLocalStorage()[0],
-        ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
-        [LINK_COLOR, "grey", "grey", LINK_COLOR],
-        async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
 
+const isLocalStorageEnabled = setupFourStateToggle(
+    localStorageCheckbox,
+    localStorageCheckboxLabel,
+    readFromLocalStorage()[0],
+    ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
+    [LINK_COLOR, "grey", "grey", LINK_COLOR],
+    async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
+
+/**
+ * @param {string[]} swimlaneIds
+ * @param {number} numTasks
+ */
 function makeTaskDAG(swimlaneIds, numTasks) {
     _generationStreamId = _generationStreamId || 1;
     const streamName = `Stream ${_generationStreamId}`;
@@ -98,6 +103,10 @@ function makeTaskDAG(swimlaneIds, numTasks) {
     return tasks;
 }
 
+/**
+ * @param {string} name
+ * @param {string} swimlaneId
+ */
 function makeFixedTask(name, swimlaneId) {
     const startDays = randRange(1, 100);
     const durationDays = randRange(4, 45);
@@ -112,6 +121,11 @@ function makeFixedTask(name, swimlaneId) {
     };
 }
 
+/**
+ * @param {string} name
+ * @param {string} swimlaneId
+ * @param {string[]} deps
+ */
 function makeFloatingTask(name, swimlaneId, deps) {
     const durationDays = randRange(10, 25);
     const task = {
@@ -470,16 +484,25 @@ function dateToIso(date) {
     return date.toISOString().split('T')[0];
 }
 
+/** @param {number} days */
 function addDays(date, days) {
     const ret = new Date(date);
     ret.setDate(ret.getDate() + days);
     return ret;
 }
 
+/** 
+ * @param {Date} date1 
+ * @param {Date} date2
+ */
 function diffDays(date1, date2) {
     return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
 }
 
+/** 
+ * @param {Date} start 
+ * @param {Date} end
+ */
 function getDateRangeText(start, end) {
     const startText = start.toLocaleDateString('en-US', {
         month: 'short',
@@ -497,6 +520,10 @@ function getDateRangeText(start, end) {
     return `${startText} - ${endText}`;
 }
 
+/**
+ * @param {any} maybeInt
+ * @param {number} defaultIfNotInt
+ */
 function parseIntOrDefault(maybeInt, defaultIfNotInt) {
     if (typeof maybeInt === "number") {
         return maybeInt;
@@ -596,16 +623,25 @@ function interpolateColor(start, end, t) {
     ];
 }
 
+/**
+ * @param {number} lo 
+ * @param {number} hiExcl 
+ */
 function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
 }
 
+/**
+ * @template T
+ * @param {T[]} arr
+ */
 function randChoice(arr) {
     return arr[randRange(0, arr.length)];
 }
 
 /**
  * @param {typeof _timeline} rawTimeline 
+ * @returns {d3.Selection<SVGElement, unknown, HTMLElement, any>}
  */
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
@@ -876,8 +912,13 @@ function renderTimeline(rawTimeline) {
     return svg;
 }
 
-
-async function initializeMonacoEditorAsynchronously(initialJson, onRender) {
+/**
+ * 
+ * @param {string} initialJson 
+ * @param {(json: string) => { }} onAfterRender 
+ * @returns 
+ */
+async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) {
     _timeline = JSON.parse(initialJson);
 
     return new Promise((resolve) => {
@@ -914,7 +955,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onRender) {
                 try {
                     _timeline = JSON.parse(json);
                     rerenderTimeline();
-                    onRender(json);
+                    onAfterRender(json);
                 }
                 catch (e) {
                     console.warn("Exception while rendering timeline:", e);
@@ -942,7 +983,6 @@ function parseDuration(duration) {
 }
 
 /**
- * 
  * @param {string} start 
  * @param {string} end 
  */
@@ -950,6 +990,7 @@ function getDuration(start, end) {
     return diffDays(new Date(start), new Date(end));
 }
 
+/** @param {number} length */
 function zeroArray(length) {
     const arr = [];
     for (let i = 0; i < length; i++) {
@@ -963,6 +1004,10 @@ function timer() {
     return () => new Date() - t0;
 }
 
+/**
+ * @param {typeof _timeline.tasks} tasks
+ * @param {typeof _timeline.swimlanes} swimlanes
+ */
 function getCacheKey(tasks, swimlanes) {
     tasks = tasks.slice();
     swimlanes = swimlanes.slice();
@@ -1168,7 +1213,9 @@ async function scheduleTasks(timeline) {
 }
 
 async function hackReloadWindowIfNeeded() {
-    // hack to reload page if SAB is undefined and coepWorker hasn't loaded
+    // last resort, and doesn't always work
+    // hack to reload page if SAB is `undefined` and coepWorker hasn't reloaded the page.
+    // TODO: fix coepWorker so this is not required.
     const sab = typeof SharedArrayBuffer === "undefined";
     const reload = window.sessionStorage.getItem("lastResortReload");
     if (sab && (reload === null || (new Date().getTime() - parseInt(reload) > 15000))) {
@@ -1186,7 +1233,6 @@ async function flushTimeline() {
     if (!_renderNeeded) {
         return;
     }
-
     _renderNeeded = false;
 
     await hackReloadWindowIfNeeded();
@@ -1251,7 +1297,5 @@ async function main() {
     initializeGoogleFontsWorker();
     rerenderTimeline();
 }
-
-
 
 main();
