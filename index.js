@@ -359,7 +359,7 @@ function addStylesheetWithUrl(url) {
 
 function getGFontConsent(fontName) {
     if (_hasGfontConsent === null) {
-        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the name of the font ("${fontName}"). Continue?`)
+        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`)
         _hasGfontConsent = `${result}`;
         window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
     }
