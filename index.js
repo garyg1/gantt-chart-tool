@@ -280,6 +280,50 @@ const measureText = ((() => {
     }
 })());
 
+// Approach discussed https://groups.google.com/g/d3-js/c/oVbg5HkAoH4?pli=1
+// Code suggested there doesn't work anymore for d3v7
+// This is an alternative implementation.
+function cullOverlappingTickLabels(xAxisTicks, font) {
+    try {
+        const minAxisPadding = 8;
+        const labelTextSize = 9;
+        const getXAndRadius = (c) => {
+            const cText = c.textContent;
+            const cTransform = c.attributes.transform.value; // of the form "translate(x, y)"
+            const [_, x, y] = [...cTransform.matchAll('translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)')][0].map(parseFloat);
+            const width = measureText(cText, labelTextSize, font);
+            return [x, width / 2];
+        }
+
+        const toRemove = [];
+        for (let i = 0; i < xAxisTicks.length - 1; i++) {
+            const curr = xAxisTicks[i];
+            let adjacent = xAxisTicks[i + 1];
+
+            const [cx, cr] = getXAndRadius(curr);
+            let [nx, nr] = getXAndRadius(adjacent);
+
+            // walk forward until we find a tick that doesn't overlap
+            while (cx + cr + minAxisPadding > nx - nr) {
+                toRemove.push(adjacent);
+                i++;
+                if (i >= xAxisTicks.length - 1) {
+                    break;
+                }
+                adjacent = xAxisTicks[i + 1];
+                [nx, nr] = getXAndRadius(adjacent);
+            }
+        }
+
+        for (const elt of toRemove) {
+            d3.select(elt).remove();
+        }
+    }
+    catch (err) {
+        console.warn('Could not cull overlapping date labels', err);
+    }
+}
+
 // https://stackoverflow.com/a/47355187
 const standardizeColor = ((() => {
     const canvas = document.createElement('canvas');
@@ -295,7 +339,7 @@ const standardizeColor = ((() => {
 /** @returns {Promise<HTMLCanvasElement>} */
 async function renderAsCanvas() {
     return new Promise((resolve) => {
-        const svg = renderTimeline(_scheduledTimeline).node();
+        const svg = renderTimeline(_scheduledTimeline);
         const width = svg.width.baseVal.value * 2;
         const height = svg.height.baseVal.value * 2;
         const paddingX = 40;
@@ -410,11 +454,11 @@ async function loadGoogleFont() {
 
     const gfontConsent = getGFontConsent(fontName);
     if (gfontConsent === false) {
-        console.log(`not loading font '${fontName}' - user declined consent`)
+        console.log(`not loading font '${fontName}' - previously declined`)
         return false;
     }
     else if (gfontConsent === true) {
-        console.log(`loading font '${fontName}' - user previously consented`)
+        console.log(`loading font '${fontName}' - previously consented`)
     }
 
     const url = `https://fonts.googleapis.com/css2?family=${fontName}`;
@@ -641,7 +685,7 @@ function randChoice(arr) {
 
 /**
  * @param {typeof _timeline} rawTimeline 
- * @returns {d3.Selection<SVGElement, unknown, HTMLElement, any>}
+ * @returns {SVGElement}
  */
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
@@ -803,10 +847,14 @@ function renderTimeline(rawTimeline) {
         .attr("y2", height)
         .attr("stroke", xAxisGridColor)
 
-    const xAxis = svg.append("g")
+    const xAxis = d3.axisTop(dateScale);
+    const xAxisTicks = svg.append("g")
         .attr("transform", `translate(0, ${chartMarginTop})`)
-        .call(d3.axisTop(dateScale))
+        .call(xAxis)
         .attr("font-family", font)
+        .selectAll('.tick');
+
+    cullOverlappingTickLabels([...xAxisTicks], font);
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
         const taskRects = svg.selectAll("taskbars")
@@ -909,7 +957,7 @@ function renderTimeline(rawTimeline) {
             return rgbToColor(interpolateColor(rgb, colorToRgb("black"), 0.8));
         });
 
-    return svg;
+    return svg.node();
 }
 
 /**
@@ -1246,7 +1294,7 @@ async function flushTimeline() {
         while (container.firstChild) {
             container.removeChild(container.lastChild);
         }
-        container.append(svg.node());
+        container.append(svg);
         notifyRendered();
     } catch (e) {
         console.error('Building timeline failed', e);
