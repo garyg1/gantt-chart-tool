@@ -56,7 +56,7 @@ var _generationStreamId = 1;
 let _overwriteText = null;
 let _renderNeeded = false;
 let _scheduledTimeline = null;
-let _hasConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
+let _hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
 const _triedFonts = new Set();
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
@@ -344,13 +344,13 @@ function addStylesheetWithUrl(url) {
 }
 
 function getGFontConsent(fontName) {
-    if (_hasConsent === null) {
-        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the name of the font. Continue?`)
-        _hasConsent = `${result}`;
-        window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasConsent);
+    if (_hasGfontConsent === null) {
+        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the name of the font ("${fontName}"). Continue?`)
+        _hasGfontConsent = `${result}`;
+        window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
     }
 
-    return _hasConsent === 'true';
+    return _hasGfontConsent === 'true';
 }
 
 /**
