@@ -21,9 +21,11 @@
  * SOFTWARE.
  */
 
-// This file contains the entire timline renderer/optimizer application.
-// Our goal is simplicity and minimizing dependencies. It is pure JavaScript,
-// and does not require a bundler or framework.
+/*
+ * This file contains the entire timline renderer/optimizer application.
+ * Our goal is simplicity and minimizing dependencies. It is pure JavaScript,
+ * and does not require a bundler or framework.
+ */
 
 const container = document.getElementById('container');
 const monacoContainer = document.getElementById('monaco-container');
@@ -972,7 +974,6 @@ function renderTimeline(rawTimeline) {
 /**
  * @param {string} initialJson
  * @param {(json: string) => { }} onAfterRender
- * @returns
  */
 async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) {
     _timeline = JSON.parse(initialJson);
