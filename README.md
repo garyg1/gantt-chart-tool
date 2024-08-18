@@ -1,5 +1,5 @@
 # Gantt Chart Tool
-A free (MIT), offline, JSON-based Gantt chart maker with minimal dependencies.
+A simple, free (MIT), offline, JSON-based Gantt chart maker with minimal dependencies.
 
 ### Features
 * Define your timelines in a JSON DSL ([schema](https://github.com/garyg1/gantt-chart-tool/blob/main/schema.json)).
