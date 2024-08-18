@@ -1,17 +1,17 @@
 /**
  * @license
  * Copyright (c) 2023-2024 Gary Gurlaskie
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -173,9 +173,8 @@ function makeFloatingTask(name, swimlaneId, deps) {
 }
 
 /**
- * 
- * @param {HTMLElement} textElt 
- * @param {string[]} statuses 
+ * @param {HTMLElement} textElt
+ * @param {string[]} statuses
  * @returns {(() => {})[]} setStatus
  */
 function setupStatusDisplay(textElt, statuses) {
@@ -187,10 +186,10 @@ function setupStatusDisplay(textElt, statuses) {
 }
 
 /**
- * @param {HTMLInputElement} checkboxElt 
+ * @param {HTMLInputElement} checkboxElt
  * @param {HTMLLabelElement} labelElt
  * @param {boolean} initialValue
- * @param {[string, string, string, string]} labels 
+ * @param {[string, string, string, string]} labels
  * @param {[string, string, string, string]} textColors
  * @param {(boolean) => Promise} action
 */
@@ -222,10 +221,10 @@ function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textC
 }
 
 /**
-* 
-* @param {HTMLElement} button 
-* @param {[string, string, string]} labels 
-* @param {() => Promise} action 
+*
+* @param {HTMLElement} button
+* @param {[string, string, string]} labels
+* @param {() => Promise} action
 */
 function setupThreeStateButton(button, labels, action) {
     labels = labels.slice();
@@ -264,7 +263,7 @@ async function sleep(ms) {
 }
 
 /**
- * @param {() => boolean} action 
+ * @param {() => boolean} action
  * @param {number} timeoutMs
  */
 function pollWithTimeout(action, timeoutMs) {
@@ -486,16 +485,16 @@ function addDays(date, days) {
     return ret;
 }
 
-/** 
- * @param {Date} date1 
+/**
+ * @param {Date} date1
  * @param {Date} date2
  */
 function diffDays(date1, date2) {
     return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
 }
 
-/** 
- * @param {Date} start 
+/**
+ * @param {Date} start
  * @param {Date} end
  */
 function getDateRangeText(start, end) {
@@ -563,7 +562,7 @@ function parseDateOrDefault(maybeDateString, defaultIfNotDate) {
 
 /**
  * @typedef {[number, number, number]} RGBColor
- * @param {string} hex 
+ * @param {string} hex
  * @returns {RGBColor}
  */
 function colorToRgb(hex) {
@@ -586,7 +585,7 @@ function rgbToColor(rgb) {
 }
 
 /**
- * @param {[string, string]} gradient 
+ * @param {[string, string]} gradient
  * @returns {[boolean, RGBColor?, RGBColor?]}
  */
 function parseGradient(gradient) {
@@ -619,8 +618,8 @@ function interpolateColor(start, end, t) {
 }
 
 /**
- * @param {number} lo 
- * @param {number} hiExcl 
+ * @param {number} lo
+ * @param {number} hiExcl
  */
 function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
@@ -635,7 +634,7 @@ function randChoice(arr) {
 }
 
 /**
- * @param {typeof _timeline} timeline 
+ * @param {typeof _timeline} timeline
  */
 function assertTimelineValid(timeline) {
     for (const task of timeline.tasks) {
@@ -694,7 +693,7 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
 }
 
 /**
- * @param {typeof _timeline} rawTimeline 
+ * @param {typeof _timeline} rawTimeline
  * @returns {SVGElement}
  */
 function renderTimeline(rawTimeline) {
@@ -971,10 +970,9 @@ function renderTimeline(rawTimeline) {
 }
 
 /**
- * 
- * @param {string} initialJson 
- * @param {(json: string) => { }} onAfterRender 
- * @returns 
+ * @param {string} initialJson
+ * @param {(json: string) => { }} onAfterRender
+ * @returns
  */
 async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) {
     _timeline = JSON.parse(initialJson);
@@ -1039,8 +1037,8 @@ function parseDuration(duration) {
 }
 
 /**
- * @param {string} start 
- * @param {string} end 
+ * @param {string} start
+ * @param {string} end
  */
 function getDuration(start, end) {
     return diffDays(new Date(start), new Date(end));
@@ -1105,7 +1103,7 @@ function getCacheKey(tasks, swimlanes) {
 }
 
 /**
- * @param {typeof _timeline} timeline 
+ * @param {typeof _timeline} timeline
  * @returns {typeof _timeline}
  */
 async function scheduleTasks(timeline) {
