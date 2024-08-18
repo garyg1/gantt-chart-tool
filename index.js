@@ -426,6 +426,7 @@ async function loadGoogleFont() {
     }
 }
 
+/** @param {string} fontName */
 function triggerLoadGoogleFont(fontName) {
     if (!_triedFonts.has(fontName)) {
         _fontToLoad = fontName;
