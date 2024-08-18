@@ -1,4 +1,8 @@
 /**
+ * This file contains the entire timline renderer/optimizer application.
+ * Our goal is simplicity and minimizing dependencies. It is pure JavaScript,
+ * and does not require a bundler or framework.
+ *
  * @license
  * Copyright (c) 2023-2024 Gary Gurlaskie
  *
@@ -19,12 +23,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- */
-
-/*
- * This file contains the entire timline renderer/optimizer application.
- * Our goal is simplicity and minimizing dependencies. It is pure JavaScript,
- * and does not require a bundler or framework.
  */
 
 const container = document.getElementById('container');
