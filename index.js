@@ -363,7 +363,7 @@ async function copyPngToClipboard() {
         .then(canvas => new Promise(resolve => canvas.toBlob(resolve)));
 
     try {
-        console.log("writing to clipboard...", blob);
+        log("writing to clipboard...", blob);
         navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     } catch (error) {
         console.error(error);
@@ -401,11 +401,11 @@ async function loadGoogleFont() {
 
     const gfontConsent = getGFontConsent(fontName);
     if (gfontConsent === false) {
-        console.log(`not loading font '${fontName}' - previously declined`)
+        log(`not loading font '${fontName}' - previously declined`)
         return false;
     }
     else if (gfontConsent === true) {
-        console.log(`loading font '${fontName}' - previously consented`)
+        log(`loading font '${fontName}' - previously consented`)
     }
 
     const url = `https://fonts.googleapis.com/css2?family=${fontName}`;
@@ -981,7 +981,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) 
             const modelUri = monaco.Uri.parse("https://garygurlaskie.com/gantt-chart-tool/internal.json");
             const model = monaco.editor.createModel(initialJson, "json", modelUri);
 
-            console.log("Loading JSON schema...");
+            log("Loading JSON schema...");
             try {
                 const jsonSchema = await fetch("schema.json").then(r => r.json());
                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
@@ -994,7 +994,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) 
                         }
                     ],
                 });
-                console.log("Loaded JSON schema.");
+                log("Loaded JSON schema.");
             } catch (e) {
                 console.error('Failed to load JSON schema!', e);
             }
@@ -1271,7 +1271,7 @@ async function hackReloadWindowIfNeeded() {
     const sab = typeof SharedArrayBuffer === "undefined";
     const reload = window.sessionStorage.getItem("lastResortReload");
     if (sab && (reload === null || (new Date().getTime() - parseInt(reload) > 15000))) {
-        console.log("Reloading...");
+        log("Reloading...");
         window.sessionStorage.setItem("lastResortReload", new Date().getTime());
         window.location.reload();
     }
