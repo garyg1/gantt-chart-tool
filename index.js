@@ -975,6 +975,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) 
     _timeline = JSON.parse(initialJson);
 
     return new Promise((resolve) => {
+        // This `require` is provided by monaco-editor/min/vs/loader.js.
         require.config({ paths: { vs: 'monaco-editor/min/vs' } });
         require(['vs/editor/editor.main'], async () => {
             const modelUri = monaco.Uri.parse("https://garygurlaskie.com/gantt-chart-tool/internal.json");
