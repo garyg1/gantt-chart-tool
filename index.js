@@ -37,12 +37,6 @@ const localStorageCheckbox = document.getElementById('localstorage-checkbox');
 const localStorageCheckboxLabel = document.getElementById('localstorage-checkbox-label');
 const localStorageCheckboxClickArea = document.getElementById('localstorage-checkbox-clickarea');
 
-window.onbeforeunload = e => {
-    if (!readFromLocalStorage()[0] && _mutated) {
-        e.preventDefault();
-    }
-}
-
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
 const DEFAULT_WIDTH = 800;
@@ -69,6 +63,8 @@ const _solutionCache = {};
 const _loadedGoogleFonts = [];
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
 const _cssFontGenericNames = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong'];
+
+setupPageLeavePrompt();
 
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
@@ -101,12 +97,12 @@ function makeSampleTimeline() {
             { id: '3', name: 'C', maxParallelism: 2, hidden: false },
         ],
         tasks: [
-            ...makeTaskDAG(['1', '2'], 5),
-            ...makeTaskDAG(['1', '3'], 2),
-            ...makeTaskDAG(['2', '3'], 3),
-            makeFixedTask('Fixed Task 1A', '1'),
-            makeFixedTask('Fixed Task 1B', '1'),
-            makeFixedTask('Fixed Task 3A', '3'),
+            ...makeRandomTaskDAG(['1', '2'], 5),
+            ...makeRandomTaskDAG(['1', '3'], 2),
+            ...makeRandomTaskDAG(['2', '3'], 3),
+            makeRandomFixedTask('Fixed Task 1A', '1'),
+            makeRandomFixedTask('Fixed Task 1B', '1'),
+            makeRandomFixedTask('Fixed Task 3A', '3'),
         ]
     };
 }
@@ -115,7 +111,7 @@ function makeSampleTimeline() {
  * @param {string[]} swimlaneIds
  * @param {number} numTasks
  */
-function makeTaskDAG(swimlaneIds, numTasks) {
+function makeRandomTaskDAG(swimlaneIds, numTasks) {
     _generationStreamId = _generationStreamId || 1;
     const streamName = `Stream ${_generationStreamId}`;
     _generationStreamId += 1;
@@ -123,14 +119,14 @@ function makeTaskDAG(swimlaneIds, numTasks) {
     const getName = () => `${streamName} Task ${taskIdx++}`;
     const getSwimlane = () => randChoice(swimlaneIds);
     const tasks = [
-        makeFloatingTask(getName(), getSwimlane(), []),
-        makeFloatingTask(getName(), getSwimlane(), []),
+        makeRandomFloatingTask(getName(), getSwimlane(), []),
+        makeRandomFloatingTask(getName(), getSwimlane(), []),
     ];
 
     while (tasks.length < numTasks) {
-        const numParents = randChoice([0, 0, 0, 1, 1, 2]);
+        const numParents = randChoice([0, 0, 1, 1, 1, 2]);
         const parentIdxes = [...new Set(zeroArray(numParents).map(_ => randRange(0, tasks.length)))];
-        tasks.push(makeFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
+        tasks.push(makeRandomFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
     }
 
     return tasks;
@@ -140,7 +136,7 @@ function makeTaskDAG(swimlaneIds, numTasks) {
  * @param {string} name
  * @param {string} swimlaneId
  */
-function makeFixedTask(name, swimlaneId) {
+function makeRandomFixedTask(name, swimlaneId) {
     const startDays = randRange(1, 100);
     const durationDays = randRange(4, 45);
 
@@ -159,7 +155,7 @@ function makeFixedTask(name, swimlaneId) {
  * @param {string} swimlaneId
  * @param {string[]} deps
  */
-function makeFloatingTask(name, swimlaneId, deps) {
+function makeRandomFloatingTask(name, swimlaneId, deps) {
     const durationDays = randRange(10, 25);
     const task = {
         name,
@@ -1315,6 +1311,15 @@ function initializeTimelineWorker() {
         window.setTimeout(runFlushJob, 250);
     }
     window.setTimeout(runFlushJob, 0);
+}
+
+function setupPageLeavePrompt() {
+    window.onbeforeunload = e => {
+        const timelineHasUnsafedEdits = !readFromLocalStorage()[0] && _mutated;
+        if (timelineHasUnsafedEdits) {
+            e.preventDefault();
+        }
+    };
 }
 
 function writeOptimizedScheduleToMonaco() {
