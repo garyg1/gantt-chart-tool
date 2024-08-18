@@ -1,17 +1,22 @@
 /**
+ * @file The entire timline renderer/optimizer application is contained in this file.
+ * The design goal is simplicity and minimizing dependencies. It is pure JavaScript,
+ * does not require a bundler or framework, and can be loaded by any HTML page
+ * that contains the below global HTMLElements.
+ *
  * @license
  * Copyright (c) 2023-2024 Gary Gurlaskie
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,6 +25,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+
 const container = document.getElementById('container');
 const monacoContainer = document.getElementById('monaco-container');
 const downloadButton = document.getElementById('download-button');
@@ -29,12 +35,6 @@ const statusField = document.getElementById('status-field');
 const localStorageCheckbox = document.getElementById('localstorage-checkbox');
 const localStorageCheckboxLabel = document.getElementById('localstorage-checkbox-label');
 const localStorageCheckboxClickArea = document.getElementById('localstorage-checkbox-clickarea');
-
-window.onbeforeunload = e => {
-    if (!readFromLocalStorage()[0] && _mutated) {
-        e.preventDefault();
-    }
-}
 
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
@@ -63,12 +63,14 @@ const _loadedGoogleFonts = [];
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
 const _cssFontGenericNames = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong'];
 
+setupPageLeavePrompt();
+
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
-setupThreeStateButton(fixedIntervalsButton, ["Write Optimized Schedule", "...", "Written!"], writeOptimizedSchedule);
+setupThreeStateButton(fixedIntervalsButton, ["Write Optimized Schedule", "...", "Written!"], writeOptimizedScheduleToMonaco);
 
 const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout]
-    = setupStatus(statusField, ['Optimizing...', 'Rendering...', 'Rendered', 'Failed', `Timed out after ${_globalTimeoutMs / 1000} sec`]);
+    = setupStatusDisplay(statusField, ['Optimizing...', 'Rendering...', 'Rendered', 'Failed', `Timed out after ${_globalTimeoutMs / 1000} sec`]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
     localStorageCheckbox,
@@ -78,11 +80,37 @@ const isLocalStorageEnabled = setupFourStateToggle(
     [LINK_COLOR, "grey", "grey", LINK_COLOR],
     async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
 
+function makeSampleTimeline() {
+    return {
+        title: 'Project A',
+        config: {
+            dateLabels: true,
+            width: 800,
+            font: 'sans-serif',
+            palette: { gradient: ['#3c5ca2', 'seagreen'] },
+            startDate: START_DATE_ISO,
+        },
+        swimlanes: [
+            { id: '1', name: 'A', maxParallelism: 2 },
+            { id: '2', name: 'B', maxParallelism: 2 },
+            { id: '3', name: 'C', maxParallelism: 2, hidden: false },
+        ],
+        tasks: [
+            ...makeRandomTaskDAG(['1', '2'], 5),
+            ...makeRandomTaskDAG(['1', '3'], 2),
+            ...makeRandomTaskDAG(['2', '3'], 3),
+            makeRandomFixedTask('Fixed Task 1A', '1'),
+            makeRandomFixedTask('Fixed Task 1B', '1'),
+            makeRandomFixedTask('Fixed Task 3A', '3'),
+        ]
+    };
+}
+
 /**
  * @param {string[]} swimlaneIds
  * @param {number} numTasks
  */
-function makeTaskDAG(swimlaneIds, numTasks) {
+function makeRandomTaskDAG(swimlaneIds, numTasks) {
     _generationStreamId = _generationStreamId || 1;
     const streamName = `Stream ${_generationStreamId}`;
     _generationStreamId += 1;
@@ -90,14 +118,14 @@ function makeTaskDAG(swimlaneIds, numTasks) {
     const getName = () => `${streamName} Task ${taskIdx++}`;
     const getSwimlane = () => randChoice(swimlaneIds);
     const tasks = [
-        makeFloatingTask(getName(), getSwimlane(), []),
-        makeFloatingTask(getName(), getSwimlane(), []),
+        makeRandomFloatingTask(getName(), getSwimlane(), []),
+        makeRandomFloatingTask(getName(), getSwimlane(), []),
     ];
 
     while (tasks.length < numTasks) {
-        const numParents = randChoice([0, 0, 0, 1, 1, 2]);
+        const numParents = randChoice([0, 0, 1, 1, 1, 2]);
         const parentIdxes = [...new Set(zeroArray(numParents).map(_ => randRange(0, tasks.length)))];
-        tasks.push(makeFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
+        tasks.push(makeRandomFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
     }
 
     return tasks;
@@ -107,7 +135,7 @@ function makeTaskDAG(swimlaneIds, numTasks) {
  * @param {string} name
  * @param {string} swimlaneId
  */
-function makeFixedTask(name, swimlaneId) {
+function makeRandomFixedTask(name, swimlaneId) {
     const startDays = randRange(1, 100);
     const durationDays = randRange(4, 45);
 
@@ -126,7 +154,7 @@ function makeFixedTask(name, swimlaneId) {
  * @param {string} swimlaneId
  * @param {string[]} deps
  */
-function makeFloatingTask(name, swimlaneId, deps) {
+function makeRandomFloatingTask(name, swimlaneId, deps) {
     const durationDays = randRange(10, 25);
     const task = {
         name,
@@ -141,39 +169,12 @@ function makeFloatingTask(name, swimlaneId, deps) {
     return task;
 }
 
-function makeSampleTimeline() {
-    return {
-        title: 'Project A',
-        config: {
-            dateLabels: true,
-            width: 800,
-            font: 'sans-serif',
-            palette: { gradient: ['#3c5ca2', 'seagreen'] },
-            startDate: START_DATE_ISO,
-        },
-        swimlanes: [
-            { id: '1', name: 'A', maxParallelism: 2 },
-            { id: '2', name: 'B', maxParallelism: 2 },
-            { id: '3', name: 'C', maxParallelism: 2, hidden: false },
-        ],
-        tasks: [
-            ...makeTaskDAG(['1', '2'], 5),
-            ...makeTaskDAG(['1', '3'], 2),
-            ...makeTaskDAG(['2', '3'], 3),
-            makeFixedTask('Fixed Task 1A', '1'),
-            makeFixedTask('Fixed Task 1B', '1'),
-            makeFixedTask('Fixed Task 3A', '3'),
-        ]
-    };
-}
-
 /**
- * 
- * @param {HTMLElement} textElt 
- * @param {string[]} statuses 
+ * @param {HTMLElement} textElt
+ * @param {string[]} statuses
  * @returns {(() => {})[]} setStatus
  */
-function setupStatus(textElt, statuses) {
+function setupStatusDisplay(textElt, statuses) {
     return statuses.map(status => (
         () => {
             textElt.innerText = status;
@@ -182,10 +183,10 @@ function setupStatus(textElt, statuses) {
 }
 
 /**
- * @param {HTMLInputElement} checkboxElt 
+ * @param {HTMLInputElement} checkboxElt
  * @param {HTMLLabelElement} labelElt
  * @param {boolean} initialValue
- * @param {[string, string, string, string]} labels 
+ * @param {[string, string, string, string]} labels
  * @param {[string, string, string, string]} textColors
  * @param {(boolean) => Promise} action
 */
@@ -217,10 +218,10 @@ function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textC
 }
 
 /**
-* 
-* @param {HTMLElement} button 
-* @param {[string, string, string]} labels 
-* @param {() => Promise} action 
+*
+* @param {HTMLElement} button
+* @param {[string, string, string]} labels
+* @param {() => Promise} action
 */
 function setupThreeStateButton(button, labels, action) {
     labels = labels.slice();
@@ -251,21 +252,41 @@ function setupThreeStateButton(button, labels, action) {
     setText(0);
 }
 
-function assertTimelineValid(timeline) {
-    for (const task of timeline.tasks) {
-        if (task.interval.start > task.interval.end) {
-            throw new Error(`Task '${task.id}' ('${task.name}') has start > end.`);
-        }
-
-        if (!timeline.swimlanes.some(swimlane => swimlane.id === task.swimlaneId)) {
-            throw new Error(`Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`)
-        }
-    }
-}
-
+/** @param {number} ms */
 async function sleep(ms) {
     return new Promise(resolve => {
         setTimeout(resolve, ms);
+    });
+}
+
+/**
+ * @param {() => boolean} action
+ * @param {number} timeoutMs
+ */
+function pollWithTimeout(action, timeoutMs) {
+    const start = new Date();
+    return new Promise((resolve, reject) => {
+        function checkAction() {
+            let result = false;
+            try {
+                result = action();
+            }
+            catch (err) {
+                console.warn("Got error while polling", err);
+            }
+
+            if (result) {
+                resolve();
+                return;
+            }
+
+            if (new Date() - start > timeoutMs) {
+                reject(new Error("Timed out"));
+            }
+
+            setTimeout(checkAction, 250);
+        }
+        setTimeout(checkAction, 0);
     });
 }
 
@@ -279,50 +300,6 @@ const measureText = ((() => {
         return context.measureText(text).width;
     }
 })());
-
-// Approach discussed https://groups.google.com/g/d3-js/c/oVbg5HkAoH4?pli=1
-// Code suggested there doesn't work anymore for d3v7
-// This is an alternative implementation.
-function cullOverlappingTickLabels(xAxisTicks, font) {
-    try {
-        const minAxisPadding = 8;
-        const labelTextSize = 9;
-        const getXAndRadius = (c) => {
-            const cText = c.textContent;
-            const cTransform = c.attributes.transform.value; // of the form "translate(x, y)"
-            const [_, x, y] = [...cTransform.matchAll('translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)')][0].map(parseFloat);
-            const width = measureText(cText, labelTextSize, font);
-            return [x, width / 2];
-        }
-
-        const toRemove = [];
-        for (let i = 0; i < xAxisTicks.length - 1; i++) {
-            const curr = xAxisTicks[i];
-            let adjacent = xAxisTicks[i + 1];
-
-            const [cx, cr] = getXAndRadius(curr);
-            let [nx, nr] = getXAndRadius(adjacent);
-
-            // walk forward until we find a tick that doesn't overlap
-            while (cx + cr + minAxisPadding > nx - nr) {
-                toRemove.push(adjacent);
-                i++;
-                if (i >= xAxisTicks.length - 1) {
-                    break;
-                }
-                adjacent = xAxisTicks[i + 1];
-                [nx, nr] = getXAndRadius(adjacent);
-            }
-        }
-
-        for (const elt of toRemove) {
-            d3.select(elt).remove();
-        }
-    }
-    catch (err) {
-        console.warn('Could not cull overlapping date labels', err);
-    }
-}
 
 // https://stackoverflow.com/a/47355187
 const standardizeColor = ((() => {
@@ -394,6 +371,7 @@ async function copyPngToClipboard() {
 }
 
 // https://stackoverflow.com/a/65917124
+/** @param {string} url */
 function addStylesheetWithUrl(url) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -401,6 +379,7 @@ function addStylesheetWithUrl(url) {
     document.getElementsByTagName('head')[0].appendChild(link);
 }
 
+/** @param {string} fontName */
 function getGFontConsent(fontName) {
     if (_hasGfontConsent === null) {
         const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`)
@@ -409,38 +388,6 @@ function getGFontConsent(fontName) {
     }
 
     return _hasGfontConsent === 'true';
-}
-
-/**
- * @param {() => boolean} action 
- * @param {number} timeoutMs 
- * @returns {Promise}
- */
-function pollWithTimeout(action, timeoutMs) {
-    const start = new Date();
-    return new Promise((resolve, reject) => {
-        function checkAction() {
-            let result = false;
-            try {
-                result = action();
-            }
-            catch (err) {
-                console.warn("Got error while polling", err);
-            }
-
-            if (result) {
-                resolve();
-                return;
-            }
-
-            if (new Date() - start > timeoutMs) {
-                reject(new Error("Timed out"));
-            }
-
-            setTimeout(checkAction, 250);
-        }
-        setTimeout(checkAction, 0);
-    });
 }
 
 async function loadGoogleFont() {
@@ -478,6 +425,7 @@ async function loadGoogleFont() {
     }
 }
 
+/** @param {string} fontName */
 function triggerLoadGoogleFont(fontName) {
     if (!_triedFonts.has(fontName)) {
         _fontToLoad = fontName;
@@ -535,16 +483,16 @@ function addDays(date, days) {
     return ret;
 }
 
-/** 
- * @param {Date} date1 
+/**
+ * @param {Date} date1
  * @param {Date} date2
  */
 function diffDays(date1, date2) {
     return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
 }
 
-/** 
- * @param {Date} start 
+/**
+ * @param {Date} start
  * @param {Date} end
  */
 function getDateRangeText(start, end) {
@@ -612,7 +560,7 @@ function parseDateOrDefault(maybeDateString, defaultIfNotDate) {
 
 /**
  * @typedef {[number, number, number]} RGBColor
- * @param {string} hex 
+ * @param {string} hex
  * @returns {RGBColor}
  */
 function colorToRgb(hex) {
@@ -635,7 +583,7 @@ function rgbToColor(rgb) {
 }
 
 /**
- * @param {[string, string]} gradient 
+ * @param {[string, string]} gradient
  * @returns {[boolean, RGBColor?, RGBColor?]}
  */
 function parseGradient(gradient) {
@@ -668,8 +616,8 @@ function interpolateColor(start, end, t) {
 }
 
 /**
- * @param {number} lo 
- * @param {number} hiExcl 
+ * @param {number} lo
+ * @param {number} hiExcl
  */
 function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
@@ -684,7 +632,66 @@ function randChoice(arr) {
 }
 
 /**
- * @param {typeof _timeline} rawTimeline 
+ * @param {typeof _timeline} timeline
+ */
+function assertTimelineValid(timeline) {
+    for (const task of timeline.tasks) {
+        if (task.interval.start > task.interval.end) {
+            throw new Error(`Task '${task.id}' ('${task.name}') has start > end.`);
+        }
+
+        if (!timeline.swimlanes.some(swimlane => swimlane.id === task.swimlaneId)) {
+            throw new Error(`Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`)
+        }
+    }
+}
+
+// Approach discussed https://groups.google.com/g/d3-js/c/oVbg5HkAoH4?pli=1
+// Code suggested there doesn't work anymore for d3v7
+// This is an alternative implementation.
+function cullOverlappingTickLabels(xAxisTicks, font) {
+    try {
+        const minAxisPadding = 8;
+        const labelTextSize = 9;
+        const getXAndRadius = (c) => {
+            const cText = c.textContent;
+            const cTransform = c.attributes.transform.value; // of the form "translate(x, y)"
+            const [_, x, y] = [...cTransform.matchAll('translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)')][0].map(parseFloat);
+            const width = measureText(cText, labelTextSize, font);
+            return [x, width / 2];
+        }
+
+        const toRemove = [];
+        for (let i = 0; i < xAxisTicks.length - 1; i++) {
+            const curr = xAxisTicks[i];
+            let adjacent = xAxisTicks[i + 1];
+
+            const [cx, cr] = getXAndRadius(curr);
+            let [nx, nr] = getXAndRadius(adjacent);
+
+            // walk forward until we find a tick that doesn't overlap
+            while (cx + cr + minAxisPadding > nx - nr) {
+                toRemove.push(adjacent);
+                i++;
+                if (i >= xAxisTicks.length - 1) {
+                    break;
+                }
+                adjacent = xAxisTicks[i + 1];
+                [nx, nr] = getXAndRadius(adjacent);
+            }
+        }
+
+        for (const elt of toRemove) {
+            d3.select(elt).remove();
+        }
+    }
+    catch (err) {
+        console.warn('Could not cull overlapping date labels', err);
+    }
+}
+
+/**
+ * @param {typeof _timeline} rawTimeline
  * @returns {SVGElement}
  */
 function renderTimeline(rawTimeline) {
@@ -961,15 +968,14 @@ function renderTimeline(rawTimeline) {
 }
 
 /**
- * 
- * @param {string} initialJson 
- * @param {(json: string) => { }} onAfterRender 
- * @returns 
+ * @param {string} initialJson
+ * @param {(json: string) => { }} onAfterRender
  */
 async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) {
     _timeline = JSON.parse(initialJson);
 
     return new Promise((resolve) => {
+        // This `require` is provided by monaco-editor/min/vs/loader.js.
         require.config({ paths: { vs: 'monaco-editor/min/vs' } });
         require(['vs/editor/editor.main'], async () => {
             const modelUri = monaco.Uri.parse("https://garygurlaskie.com/gantt-chart-tool/internal.json");
@@ -1019,9 +1025,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) 
     });
 }
 
-/**
- * @param {string} duration 
- */
+/** @param {string} duration */
 function parseDuration(duration) {
     const matches = [...duration.matchAll('PT([0-9]+)D')];
     if (matches.length != 1) {
@@ -1031,8 +1035,8 @@ function parseDuration(duration) {
 }
 
 /**
- * @param {string} start 
- * @param {string} end 
+ * @param {string} start
+ * @param {string} end
  */
 function getDuration(start, end) {
     return diffDays(new Date(start), new Date(end));
@@ -1097,7 +1101,7 @@ function getCacheKey(tasks, swimlanes) {
 }
 
 /**
- * @param {typeof _timeline} timeline 
+ * @param {typeof _timeline} timeline
  * @returns {typeof _timeline}
  */
 async function scheduleTasks(timeline) {
@@ -1310,7 +1314,16 @@ function initializeTimelineWorker() {
     window.setTimeout(runFlushJob, 0);
 }
 
-function writeOptimizedSchedule() {
+function setupPageLeavePrompt() {
+    window.onbeforeunload = e => {
+        const timelineHasUnsafedEdits = !readFromLocalStorage()[0] && _mutated;
+        if (timelineHasUnsafedEdits) {
+            e.preventDefault();
+        }
+    };
+}
+
+function writeOptimizedScheduleToMonaco() {
     if (_overwriteText !== null && _scheduledTimeline !== null) {
         const timelineToWrite = {
             ..._scheduledTimeline,
