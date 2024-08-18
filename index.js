@@ -1,8 +1,8 @@
 /**
  * @file The entire timline renderer/optimizer application is contained in this file.
  * The design goal is simplicity and minimizing dependencies. It is pure JavaScript,
- * does not require a bundler or framework, and will run on any HTML page that contains
- * the below global HTMLElements.
+ * does not require a bundler or framework, and can be loaded by any HTML page
+ * that contains the below global HTMLElements.
  *
  * @license
  * Copyright (c) 2023-2024 Gary Gurlaskie
