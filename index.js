@@ -52,7 +52,7 @@ let _fontToLoad = null;
 let _globalTimeoutMs = 20000;
 let _lastKnownJson = null;
 let _mutated = false;
-var _generationStreamId = 1;
+var _randomTaskId = 1;
 let _overwriteText = null;
 let _renderNeeded = false;
 let _scheduledTimeline = null;
@@ -91,17 +91,15 @@ function makeSampleTimeline() {
             startDate: START_DATE_ISO,
         },
         swimlanes: [
-            { id: '1', name: 'A', maxParallelism: 2 },
-            { id: '2', name: 'B', maxParallelism: 2 },
+            { id: '1', name: 'A', maxParallelism: 3 },
+            { id: '2', name: 'B', maxParallelism: 1 },
             { id: '3', name: 'C', maxParallelism: 2, hidden: false },
         ],
         tasks: [
-            ...makeRandomTaskDAG(['1', '2'], 5),
-            ...makeRandomTaskDAG(['1', '3'], 2),
-            ...makeRandomTaskDAG(['2', '3'], 3),
-            makeRandomFixedTask('Fixed Task 1A', '1'),
-            makeRandomFixedTask('Fixed Task 1B', '1'),
-            makeRandomFixedTask('Fixed Task 3A', '3'),
+            ...makeRandomTaskDAG(['1', '2', '3'], 10),
+            makeRandomFixedTask('Fixed Task A', '1'),
+            makeRandomFixedTask('Fixed Task B', '1'),
+            makeRandomFixedTask('Fixed Task C', '3'),
         ]
     };
 }
@@ -111,11 +109,8 @@ function makeSampleTimeline() {
  * @param {number} numTasks
  */
 function makeRandomTaskDAG(swimlaneIds, numTasks) {
-    _generationStreamId = _generationStreamId || 1;
-    const streamName = `Stream ${_generationStreamId}`;
-    _generationStreamId += 1;
-    let taskIdx = 1;
-    const getName = () => `${streamName} Task ${taskIdx++}`;
+    _randomTaskId = _randomTaskId || 1;
+    const getName = () => `Task ${_randomTaskId++}`;
     const getSwimlane = () => randChoice(swimlaneIds);
     const tasks = [
         makeRandomFloatingTask(getName(), getSwimlane(), []),
@@ -123,7 +118,7 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
     ];
 
     while (tasks.length < numTasks) {
-        const numParents = randChoice([0, 0, 1, 1, 1, 2]);
+        const numParents = randChoice([0, 1, 1, 1, 1, 2]);
         const parentIdxes = [...new Set(zeroArray(numParents).map(_ => randRange(0, tasks.length)))];
         tasks.push(makeRandomFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
     }
@@ -162,9 +157,9 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
         duration: `PT${durationDays}D`,
         deps: deps || [],
     };
-    const width = randChoice([1, 1, 1, 1, 1, 1, 2]);
-    if (width > 1) {
-        task.width = width;
+    // show width = 1 as example
+    if (Math.random() > 0.8) {
+        task.width = 1;
     }
     return task;
 }
