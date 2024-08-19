@@ -108,6 +108,11 @@
                             "type": "string"
                         }
                     },
+                    "width": {
+                        "type": "number",
+                        "description": "The amount of 'bandwidth' this task takes up. For example, if `swimlane.maxParallelism = 3`, and `task.width = 3`, then this task will block the entire swimlane until it finishes executing.",
+                        "default": 1
+                    },
                     "interval": {
                         "type": "object",
                         "description": "The start and end times for this task, if not auto-scheduled.",
