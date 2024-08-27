@@ -1161,12 +1161,12 @@ async function scheduleTasks(timeline) {
                 solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
                 solver.add(c.GE(ti_start[i], 0));
 
-                for (const d of (task.deps || [])) {
-                    const j = getTaskIdx(d);
-                    solver.add(c.GT(ti_start[i], ti_end[j]));
-                }
-
                 solver.add(c.LE(ti_end[i], lengthDays));
+            }
+
+            for (const d of (task.deps || [])) {
+                const j = getTaskIdx(d);
+                solver.add(c.GT(ti_start[i], ti_end[j]));
             }
 
             const s = swimlaneIndex(task);
