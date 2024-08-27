@@ -1167,8 +1167,11 @@ async function scheduleTasks(timeline) {
         const solver = new c.Optimize();
         const lengthDays = c.Int.const('lengthDays');
         const sumDays = c.Int.const('sumDays');
-        solver.minimize(lengthDays);
-        solver.minimize(sumDays);
+
+        // these are evaluated lexicographically
+        // https://microsoft.github.io/z3guide/docs/optimization/combiningobjectives
+        solver.minimize(lengthDays); // primary: minimize end date of timeline
+        solver.minimize(sumDays); // secondary: pick earliest start for each task
 
         const makeVar = (...args) => args.join('_');
         const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
