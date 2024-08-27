@@ -1166,7 +1166,12 @@ async function scheduleTasks(timeline) {
 
         const solver = new c.Optimize();
         const lengthDays = c.Int.const('lengthDays');
-        solver.minimize(lengthDays);
+        const sumDays = c.Int.const('sumDays');
+
+        // these are evaluated lexicographically
+        // https://microsoft.github.io/z3guide/docs/optimization/combiningobjectives
+        solver.minimize(lengthDays); // primary: minimize end date of timeline
+        solver.minimize(sumDays); // secondary: pick earliest start for each task
 
         const makeVar = (...args) => args.join('_');
         const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
@@ -1218,6 +1223,8 @@ async function scheduleTasks(timeline) {
             }
             solver.add(c.Eq(c.Sum(...presence), task.width || 1));
         }
+
+        solver.add(c.Eq(c.Sum(...ti_end), sumDays));
 
         for (let s = 0; s < til_present.length; s++) {
             const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
