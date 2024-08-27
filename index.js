@@ -983,7 +983,7 @@ function renderTimeline(rawTimeline) {
             .data(deps)
             .enter()
             .append("line")
-            .attr("stroke", "black")
+            .attr("stroke", "grey")
             .attr("x1", d => dateScale(d[0].interval.start))
             .attr("x2", d => dateScale(d[1].interval.end))
             .attr("y1", d => getTaskY(d[0]))
