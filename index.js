@@ -960,33 +960,35 @@ function renderTimeline(rawTimeline) {
             return rgbToColor(interpolateColor(rgb, colorToRgb("black"), 0.8));
         });
 
-    const getTaskY = t => chartMarginTop + scaleMarginTop
-        + (taskHeight + taskPadding) * t.taskIndexOverall
-        + swimlanePadding * t.swimlaneIndex
-        + (taskHeight / 2);
+    if (timeline.config.showDeps) {
+        const getTaskY = t => chartMarginTop + scaleMarginTop
+            + (taskHeight + taskPadding) * t.taskIndexOverall
+            + swimlanePadding * t.swimlaneIndex
+            + (taskHeight / 2);
 
-    const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
-    const deps = [];
-    for (const t1 of allTasks) {
-        for (const depName of (t1.deps || [])) {
-            const t2 = allTasks.find(t => t.name === depName);
-            if (!t2) {
-                log("Can't find dependency?", t1, allTasks);
-                continue;
+        const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
+        const deps = [];
+        for (const t1 of allTasks) {
+            for (const depName of (t1.deps || [])) {
+                const t2 = allTasks.find(t => t.name === depName);
+                if (!t2) {
+                    log("Can't find dependency?", t1, allTasks);
+                    continue;
+                }
+                deps.push([t1, t2]);
             }
-            deps.push([t1, t2]);
         }
-    }
 
-    const taskDeps = svg.selectAll("taskDep")
-        .data(deps)
-        .enter()
-        .append("line")
-        .attr("stroke", "black")
-        .attr("x1", d => dateScale(d[0].interval.start))
-        .attr("x2", d => dateScale(d[1].interval.end))
-        .attr("y1", d => getTaskY(d[0]))
-        .attr("y2", d => getTaskY(d[1]))
+        const depLines = svg.selectAll("taskDep")
+            .data(deps)
+            .enter()
+            .append("line")
+            .attr("stroke", "black")
+            .attr("x1", d => dateScale(d[0].interval.start))
+            .attr("x2", d => dateScale(d[1].interval.end))
+            .attr("y1", d => getTaskY(d[0]))
+            .attr("y2", d => getTaskY(d[1]))
+    }
 
     return svg.node();
 }
