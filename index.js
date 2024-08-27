@@ -1166,7 +1166,9 @@ async function scheduleTasks(timeline) {
 
         const solver = new c.Optimize();
         const lengthDays = c.Int.const('lengthDays');
+        const sumDays = c.Int.const('sumDays');
         solver.minimize(lengthDays);
+        solver.minimize(sumDays);
 
         const makeVar = (...args) => args.join('_');
         const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
@@ -1218,6 +1220,8 @@ async function scheduleTasks(timeline) {
             }
             solver.add(c.Eq(c.Sum(...presence), task.width || 1));
         }
+
+        solver.add(c.Eq(c.Sum(...ti_end), sumDays));
 
         for (let s = 0; s < til_present.length; s++) {
             const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
