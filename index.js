@@ -85,6 +85,7 @@ function makeSampleTimeline() {
         title: 'Project A',
         config: {
             dateLabels: true,
+            showDeps: false,
             width: 800,
             font: 'sans-serif',
             palette: { gradient: ['#3c5ca2', 'seagreen'] },
@@ -959,6 +960,36 @@ function renderTimeline(rawTimeline) {
             return rgbToColor(interpolateColor(rgb, colorToRgb("black"), 0.8));
         });
 
+    if (timeline.config.showDeps) {
+        const getTaskY = t => chartMarginTop + scaleMarginTop
+            + (taskHeight + taskPadding) * t.taskIndexOverall
+            + swimlanePadding * t.swimlaneIndex
+            + (taskHeight / 2);
+
+        const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
+        const deps = [];
+        for (const t1 of allTasks) {
+            for (const depName of (t1.deps || [])) {
+                const t2 = allTasks.find(t => t.name === depName);
+                if (!t2) {
+                    log("Can't find dependency?", t1, allTasks);
+                    continue;
+                }
+                deps.push([t1, t2]);
+            }
+        }
+
+        const depLines = svg.selectAll("taskDep")
+            .data(deps)
+            .enter()
+            .append("line")
+            .attr("stroke", "black")
+            .attr("x1", d => dateScale(d[0].interval.start))
+            .attr("x2", d => dateScale(d[1].interval.end))
+            .attr("y1", d => getTaskY(d[0]))
+            .attr("y2", d => getTaskY(d[1]))
+    }
+
     return svg.node();
 }
 
@@ -1161,12 +1192,12 @@ async function scheduleTasks(timeline) {
                 solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
                 solver.add(c.GE(ti_start[i], 0));
 
-                for (const d of (task.deps || [])) {
-                    const j = getTaskIdx(d);
-                    solver.add(c.GT(ti_start[i], ti_end[j]));
-                }
-
                 solver.add(c.LE(ti_end[i], lengthDays));
+            }
+
+            for (const d of (task.deps || [])) {
+                const j = getTaskIdx(d);
+                solver.add(c.GT(ti_start[i], ti_end[j]));
             }
 
             const s = swimlaneIndex(task);
