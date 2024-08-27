@@ -85,6 +85,7 @@ function makeSampleTimeline() {
         title: 'Project A',
         config: {
             dateLabels: true,
+            showDeps: false,
             width: 800,
             font: 'sans-serif',
             palette: { gradient: ['#3c5ca2', 'seagreen'] },
@@ -970,6 +971,7 @@ function renderTimeline(rawTimeline) {
         for (const depName of (t1.deps || [])) {
             const t2 = allTasks.find(t => t.name === depName);
             if (!t2) {
+                log("Can't find dependency?", t1, allTasks);
                 continue;
             }
             deps.push([t1, t2]);
