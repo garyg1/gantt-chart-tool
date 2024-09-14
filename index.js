@@ -88,7 +88,7 @@ function makeSampleTimeline() {
             showDeps: false,
             width: 800,
             font: 'sans-serif',
-            palette: { gradient: ['#3c5ca2', 'seagreen'] },
+            palette: { gradient: ['royalblue', '#2e8b57'] },
             startDate: START_DATE_ISO,
         },
         swimlanes: [
