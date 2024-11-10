@@ -50,6 +50,7 @@ const MASK_STRENGTH = 0.15;
 const MASK_SIZE = 6;
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = "#3c5ca2";
+const DEFAULT_GRID_COLOR = "#d0dce0";
 const START_DATE_ISO = dateToIso(new Date());
 
 let _z3 = null;
@@ -289,9 +290,9 @@ function prettifyJson(object, indent, lineLength) {
                         getPrettyRepresentation(
                             v,
                             nextIndent +
-                                indent +
-                                JSON.stringify(k).length +
-                                OBJ_KV_SEP.length,
+                            indent +
+                            JSON.stringify(k).length +
+                            OBJ_KV_SEP.length,
                             nextIndent + indent,
                         ),
                     );
@@ -339,6 +340,7 @@ function makeSampleTimeline() {
                     size: 6,
                     strength: 0.15,
                 },
+                gridColor: DEFAULT_GRID_COLOR,
             },
             startDate: START_DATE_ISO,
         },
@@ -1180,7 +1182,7 @@ function renderTimeline(rawTimeline) {
     const taskPadding = 5;
     const taskLabelTextColor = "#000";
     const taskDateLabelTextColor = "#555";
-    const xAxisGridColor = "#d0dce0";
+    const xAxisGridColor = parseStringOrDefault(timeline.config.palette?.gridColor, DEFAULT_GRID_COLOR);
     const xAxisGridTicks = parseIntOrDefault(
         timeline.config.gridTicks,
         DEFAULT_GRID_TICKS,
@@ -1396,10 +1398,10 @@ function renderTimeline(rawTimeline) {
                 .attr("fill", d =>
                     mask
                         ? getContrastingColor(
-                              d.swimlane.color,
-                              maskStrength,
-                              maskStrength,
-                          )
+                            d.swimlane.color,
+                            maskStrength,
+                            maskStrength,
+                        )
                         : d.swimlane.color,
                 )
                 .attr("stroke", d => getStrokeHex(d.swimlane.color))
@@ -1615,10 +1617,9 @@ async function initializeMonacoEditorAsynchronously(
                     r.json(),
                 );
                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                    validate: true,
                     schemas: [
                         {
-                            uri: "https://garygurlaskie.com/gantt-chart-tool/schema.json",
+                            uri: "/schema.json",
                             fileMatch: [modelUri.toString()],
                             schema: jsonSchema,
                         },
