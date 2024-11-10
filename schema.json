@@ -22,6 +22,10 @@
                     "type": "number",
                     "description": "Width (pixels) of the rendered chart."
                 },
+                "gridTicks": {
+                    "type": "number",
+                    "description": "Width (pixels) of the rendered chart."
+                },
                 "font": {
                     "type": "string",
                     "description": "Font family used in the rendered chart."
