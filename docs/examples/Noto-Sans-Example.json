@@ -24,91 +24,91 @@
         {
             "name": "会議の例1",
             "swimlaneId": "1",
-            "duration": "PT11D",
+            "duration": "P11D",
             "deps": [],
             "width": 1
         },
         {
             "name": "会議の例2",
             "swimlaneId": "2",
-            "duration": "PT15D",
+            "duration": "P15D",
             "deps": ["会議の例1"],
             "width": 1
         },
         {
             "name": "会議の例3",
             "swimlaneId": "3",
-            "duration": "PT15D",
+            "duration": "P15D",
             "deps": ["会議の例2"],
             "width": 1
         },
         {
             "name": "会議の例4",
             "swimlaneId": "4",
-            "duration": "PT10D",
+            "duration": "P10D",
             "deps": ["会議の例3"]
         },
         {
             "name": "会議の例5",
             "swimlaneId": "5",
-            "duration": "PT21D",
+            "duration": "P21D",
             "deps": ["会議の例4"],
             "width": 1
         },
         {
             "name": "会議の例6",
             "swimlaneId": "3",
-            "duration": "PT13D",
+            "duration": "P13D",
             "deps": ["会議の例5"],
             "width": 1
         },
         {
             "name": "会議の例7",
             "swimlaneId": "5",
-            "duration": "PT10D",
+            "duration": "P10D",
             "deps": []
         },
         {
             "name": "会議の例8",
             "swimlaneId": "1",
-            "duration": "PT11D",
+            "duration": "P11D",
             "deps": []
         },
         {
             "name": "会議の例9",
             "swimlaneId": "2",
-            "duration": "PT10D",
+            "duration": "P10D",
             "deps": ["会議の例8"]
         },
         {
             "name": "会議の例10",
             "swimlaneId": "5",
-            "duration": "PT16D",
+            "duration": "P16D",
             "deps": ["会議の例9"]
         },
         {
             "name": "会議の例11",
             "swimlaneId": "1",
-            "duration": "PT16D",
+            "duration": "P16D",
             "deps": ["会議の例10"],
             "width": 1
         },
         {
             "name": "会議の例12",
             "swimlaneId": "5",
-            "duration": "PT18D",
+            "duration": "P18D",
             "deps": ["会議の例10"]
         },
         {
             "name": "会議の例13",
             "swimlaneId": "1",
-            "duration": "PT17D",
+            "duration": "P17D",
             "deps": []
         },
         {
             "name": "会議の例14",
             "swimlaneId": "1",
-            "duration": "PT20D",
+            "duration": "P20D",
             "deps": ["会議の例8"],
             "width": 1
         },

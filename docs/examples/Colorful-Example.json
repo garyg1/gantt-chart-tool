@@ -31,88 +31,88 @@
         {
             "name": "Task 1",
             "swimlaneId": "1",
-            "duration": "PT23D",
+            "duration": "P23D",
             "deps": []
         },
         {
             "name": "Task 2",
             "swimlaneId": "2",
-            "duration": "PT20D",
+            "duration": "P20D",
             "deps": ["Task 1"]
         },
         {
             "name": "Task 3",
             "swimlaneId": "3",
-            "duration": "PT19D",
+            "duration": "P19D",
             "deps": ["Task 2"]
         },
         {
             "name": "Task 4",
             "swimlaneId": "4",
-            "duration": "PT21D",
+            "duration": "P21D",
             "deps": ["Task 3"]
         },
         {
             "name": "Task 5",
             "swimlaneId": "5",
-            "duration": "PT12D",
+            "duration": "P12D",
             "deps": ["Task 4"]
         },
         {
             "name": "Task 6",
             "swimlaneId": "2",
-            "duration": "PT23D",
+            "duration": "P23D",
             "deps": ["Task 1"],
             "width": 1
         },
         {
             "name": "Task 7",
             "swimlaneId": "5",
-            "duration": "PT13D",
+            "duration": "P13D",
             "deps": ["Task 5", "Task 2"]
         },
         {
             "name": "Task 8",
             "swimlaneId": "1",
-            "duration": "PT12D",
+            "duration": "P12D",
             "deps": []
         },
         {
             "name": "Task 9",
             "swimlaneId": "2",
-            "duration": "PT15D",
+            "duration": "P15D",
             "deps": ["Task 8"],
             "width": 1
         },
         {
             "name": "Task 10",
             "swimlaneId": "5",
-            "duration": "PT22D",
+            "duration": "P22D",
             "deps": ["Task 9"]
         },
         {
             "name": "Task 11",
             "swimlaneId": "5",
-            "duration": "PT18D",
+            "duration": "P18D",
             "deps": ["Task 9"],
             "width": 1
         },
         {
             "name": "Task 12",
             "swimlaneId": "1",
-            "duration": "PT17D",
+            "duration": "P17D",
             "deps": ["Task 10"]
         },
         {
             "name": "Task 13",
             "swimlaneId": "1",
-            "duration": "PT23D",
+            "duration": "P23D",
             "deps": ["Task 8"]
         },
         {
             "name": "Task 14",
             "swimlaneId": "4",
-            "duration": "PT24D",
+            "duration": "P24D",
             "deps": ["Task 9"]
         },
         {
