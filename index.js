@@ -127,6 +127,198 @@ const isLocalStorageEnabled = setupFourStateToggle(
     async isOn => (isOn ? initLocalStorage() : clearLocalStorage()),
 );
 
+function stringifyJson(object) {
+    return prettifyJson(object, 4, 75);
+}
+/**
+ * https://github.com/garyg1/json-formatter/blob/main/formatter.js
+ * @param {any} object
+ * @param {number} indent
+ * @param {number} lineLength
+ * @returns {string}
+ */
+function prettifyJson(object, indent, lineLength) {
+    const ARRAY_SEP = ", ";
+    const OBJ_KV_SEP = ": ";
+
+    /**
+     *
+     * @param {any} o
+     * @returns {o is any[]}
+     */
+    function isArray(o) {
+        return Array.isArray(o);
+    }
+
+    /**
+     * @param {any} o
+     * @returns {o is Object<string, any>}
+     */
+    function isObject(o) {
+        // https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript
+        return typeof o === "object" && o !== null;
+    }
+
+    /** @param {number[]} arr */
+    function sumArray(arr) {
+        return arr.reduce((s, e) => s + e, 0);
+    }
+
+    const singleLineLengths = {};
+    function getSingleLineLength(o) {
+        let ans = 0;
+        if (isArray(o)) {
+            ans = sumArray(
+                o.map(e => getSingleLineLength(e) + ARRAY_SEP.length),
+            );
+            ans += "[]".length;
+            if (o.length > 0) {
+                ans -= ARRAY_SEP.length;
+            }
+        } else if (isObject(o)) {
+            ans = sumArray(
+                Object.entries(o).map(
+                    kv =>
+                        JSON.stringify(kv[0]).length +
+                        OBJ_KV_SEP.length +
+                        getSingleLineLength(kv[1]) +
+                        ARRAY_SEP.length,
+                ),
+            );
+            ans += "{  }".length;
+            if (Object.keys(o).length > 0) {
+                ans -= ARRAY_SEP.length;
+            }
+        } else {
+            ans = JSON.stringify(o)?.length ?? 0;
+        }
+
+        singleLineLengths[o] = ans;
+        return ans;
+    }
+
+    /**
+     * @param {any} currentNode
+     * @param {number} currIndent
+     * @param {number} nextIndent
+     * @param {boolean} forceSingleLine
+     * @returns {string}
+     */
+    function getPrettyRepresentation(
+        currentNode,
+        currIndent,
+        nextIndent,
+        forceSingleLine,
+    ) {
+        const currLineWidth = lineLength - currIndent;
+        const nextLineWidth = lineLength - nextIndent;
+        if (isArray(currentNode)) {
+            if (
+                getSingleLineLength(currentNode) < currLineWidth ||
+                forceSingleLine
+            ) {
+                return [
+                    "[",
+                    currentNode
+                        .map(e => getPrettyRepresentation(e, 0, 0, true))
+                        .join(ARRAY_SEP),
+                    "]",
+                ].join("");
+            } else if (
+                getSingleLineLength(currentNode) + indent <
+                nextLineWidth
+            ) {
+                return [
+                    "[\n",
+                    " ".repeat(nextIndent + indent),
+                    currentNode
+                        .map(e => getPrettyRepresentation(e, 0, 0, true))
+                        .join(ARRAY_SEP),
+                    "\n",
+                    " ".repeat(nextIndent),
+                    "]",
+                ].join("");
+            } else {
+                const ans = ["[\n"];
+                for (const e of currentNode) {
+                    ans.push(" ".repeat(nextIndent + indent));
+                    ans.push(
+                        getPrettyRepresentation(
+                            e,
+                            nextIndent + indent,
+                            nextIndent + indent,
+                        ),
+                    );
+                    ans.push(ARRAY_SEP);
+                    ans.push("\n");
+                }
+
+                ans.pop();
+                ans.pop();
+                ans.push("\n");
+
+                ans.push(" ".repeat(nextIndent));
+                ans.push("]");
+                return ans.join("");
+            }
+        } else if (isObject(currentNode)) {
+            if (
+                getSingleLineLength(currentNode) < currLineWidth ||
+                forceSingleLine
+            ) {
+                return [
+                    "{ ",
+                    Object.entries(currentNode)
+                        .map(kvp =>
+                            [
+                                getPrettyRepresentation(kvp[0], 0, 0, true),
+                                OBJ_KV_SEP,
+                                getPrettyRepresentation(kvp[1], 0, 0, true),
+                            ].join(""),
+                        )
+                        .join(ARRAY_SEP),
+                    " }",
+                ].join("");
+            } else {
+                const ans = ["{\n"];
+                for (const [k, v] of Object.entries(currentNode)) {
+                    ans.push(" ".repeat(nextIndent + indent));
+                    ans.push(JSON.stringify(k));
+                    ans.push(OBJ_KV_SEP);
+                    ans.push(
+                        getPrettyRepresentation(
+                            v,
+                            nextIndent +
+                                indent +
+                                JSON.stringify(k).length +
+                                OBJ_KV_SEP.length,
+                            nextIndent + indent,
+                        ),
+                    );
+                    ans.push(ARRAY_SEP);
+                    ans.push("\n");
+                }
+                ans.pop();
+                ans.pop();
+                ans.push("\n");
+
+                ans.push(" ".repeat(nextIndent));
+                ans.push("}");
+                return ans.join("");
+            }
+        } else {
+            return JSON.stringify(currentNode);
+        }
+    }
+
+    const result = getPrettyRepresentation(object, 0, 0);
+    const trimmedResult = result
+        .split("\n")
+        .map(s => s.trimEnd())
+        .join("\n");
+    return trimmedResult;
+}
+
 /**
  * @typedef {ReturnType<makeSampleTimeline>} Timeline
  * @typedef {Timeline['swimlanes'][0]} Swimlane
@@ -619,7 +811,7 @@ function initLocalStorage() {
     if (_lastKnownJson !== null) {
         writeToLocalStorage(_lastKnownJson);
     } else {
-        writeToLocalStorage(JSON.stringify(_timeline, null, 2));
+        writeToLocalStorage(stringifyJson(_timeline));
     }
 }
 
@@ -1462,6 +1654,25 @@ async function initializeMonacoEditorAsynchronously(
                 monaco.editor.setTheme(getTheme(newIsDark));
             };
 
+            monaco.languages.json.jsonDefaults.modeConfiguration.documentFormattingEdits = false;
+            monaco.languages.registerDocumentFormattingEditProvider("json", {
+                provideDocumentFormattingEdits(model, options, token) {
+                    try {
+                        return [
+                            {
+                                text: stringifyJson(
+                                    JSON.parse(model.getValue()),
+                                ),
+                                range: model.getFullModelRange(),
+                            },
+                        ];
+                    } catch (err) {
+                        console.warn("Invalid JSON, cannot format", err);
+                        return [];
+                    }
+                },
+            });
+
             resolve({ overwriteText, setTheme });
         });
     });
@@ -1539,7 +1750,7 @@ function getCacheKey(tasks, swimlanes) {
         };
     });
 
-    return JSON.stringify([taskKeys, swimlaneKeys]);
+    return stringifyJson([taskKeys, swimlaneKeys]);
 }
 
 /**
@@ -1829,7 +2040,7 @@ function writeOptimizedScheduleToMonaco() {
                 },
             })),
         };
-        const timelineJson = JSON.stringify(timelineToWrite, null, 2);
+        const timelineJson = stringifyJson(timelineToWrite);
         _overwriteText(timelineJson);
         writeToLocalStorage(timelineJson);
     }
@@ -1843,7 +2054,7 @@ async function main() {
     log("running script");
 
     const [exists, storedJson] = readFromLocalStorage();
-    const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2);
+    const jsonToUse = exists ? storedJson : stringifyJson(_timeline);
     const isDark = setupColorSchemeWatcher(isDark => {
         if (_setTheme) {
             _setTheme(isDark);
