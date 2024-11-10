@@ -26,26 +26,30 @@
  * SOFTWARE.
  */
 
-const container = document.getElementById('container');
-const monacoContainer = document.getElementById('monaco-container');
-const downloadButton = document.getElementById('download-button');
-const clipboardButton = document.getElementById('clipboard-button');
-const fixedIntervalsButton = document.getElementById('fixedintervals-button');
-const statusField = document.getElementById('status-field');
-const localStorageCheckbox = document.getElementById('localstorage-checkbox');
-const localStorageCheckboxLabel = document.getElementById('localstorage-checkbox-label');
-const localStorageCheckboxClickArea = document.getElementById('localstorage-checkbox-clickarea');
+const container = document.getElementById("container");
+const monacoContainer = document.getElementById("monaco-container");
+const downloadButton = document.getElementById("download-button");
+const clipboardButton = document.getElementById("clipboard-button");
+const fixedIntervalsButton = document.getElementById("fixedintervals-button");
+const statusField = document.getElementById("status-field");
+const localStorageCheckbox = document.getElementById("localstorage-checkbox");
+const localStorageCheckboxLabel = document.getElementById(
+    "localstorage-checkbox-label"
+);
+const localStorageCheckboxClickArea = document.getElementById(
+    "localstorage-checkbox-clickarea"
+);
 
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
 const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
-const DEFAULT_FONT = 'sans-serif';
+const DEFAULT_FONT = "sans-serif";
 const STROKE_THRESHOLD = 210;
 const MASK_STRENGTH = 0.2;
 const MASK_SIZE = 8;
 const DEFAULT_GRID_TICKS = 20;
-const LINK_COLOR = '#3c5ca2';
+const LINK_COLOR = "#3c5ca2";
 const START_DATE_ISO = dateToIso(new Date());
 
 let _z3 = null;
@@ -65,16 +69,53 @@ const _triedFonts = new Set();
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
-const _cssFontGenericNames = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong'];
+const _cssFontGenericNames = [
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+    "ui-serif",
+    "ui-sans-serif",
+    "ui-monospace",
+    "ui-rounded",
+    "math",
+    "emoji",
+    "fangsong",
+];
 
 setupPageLeavePrompt();
 
-setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
-setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
-setupThreeStateButton(fixedIntervalsButton, ["Write Optimized Schedule", "...", "Written!"], writeOptimizedScheduleToMonaco);
+setupThreeStateButton(
+    downloadButton,
+    ["Download PNG", "...", "Download started!"],
+    downloadPng
+);
+setupThreeStateButton(
+    clipboardButton,
+    ["Copy to Clipboard", "...", "Copied!"],
+    copyPngToClipboard
+);
+setupThreeStateButton(
+    fixedIntervalsButton,
+    ["Write Optimized Schedule", "...", "Written!"],
+    writeOptimizedScheduleToMonaco
+);
 
-const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout]
-    = setupStatusDisplay(statusField, ['Optimizing...', 'Rendering...', 'Rendered', 'Failed', `Timed out after ${_globalTimeoutMs / 1000} sec`]);
+const [
+    notifyOptimizing,
+    notifyRendering,
+    notifyRendered,
+    notifyFailed,
+    notifyTimeout,
+] = setupStatusDisplay(statusField, [
+    "Optimizing...",
+    "Rendering...",
+    "Rendered",
+    "Failed",
+    `Timed out after ${_globalTimeoutMs / 1000} sec`,
+]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
     localStorageCheckbox,
@@ -82,7 +123,8 @@ const isLocalStorageEnabled = setupFourStateToggle(
     readFromLocalStorage()[0],
     ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
     [LINK_COLOR, "grey", "grey", LINK_COLOR],
-    async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
+    async isOn => (isOn ? initLocalStorage() : clearLocalStorage())
+);
 
 /**
  * @typedef {ReturnType<makeSampleTimeline>} Timeline
@@ -92,34 +134,34 @@ const isLocalStorageEnabled = setupFourStateToggle(
  */
 function makeSampleTimeline() {
     return {
-        title: 'Project A',
+        title: "Project A",
         config: {
             dateLabels: true,
             showDeps: false,
             width: 800,
-            font: 'sans-serif',
+            font: "sans-serif",
             palette: {
-                gradient: ['#3c5ca2', 'seagreen', '#eee'],
+                gradient: ["#3c5ca2", "seagreen", "#eee"],
                 stripes: {
                     size: 5,
                     strength: 0.3,
-                }
+                },
             },
             startDate: START_DATE_ISO,
         },
         swimlanes: [
-            { id: '1', name: 'A', maxParallelism: 3 },
-            { id: '2', name: 'B', maxParallelism: 1 },
-            { id: '3', name: 'C', maxParallelism: 1, hidden: false },
-            { id: '4', name: 'D', maxParallelism: 1, },
-            { id: '5', name: 'E', maxParallelism: 2, },
+            { id: "1", name: "A", maxParallelism: 3 },
+            { id: "2", name: "B", maxParallelism: 1 },
+            { id: "3", name: "C", maxParallelism: 1, hidden: false },
+            { id: "4", name: "D", maxParallelism: 1 },
+            { id: "5", name: "E", maxParallelism: 2 },
         ],
         tasks: [
-            ...makeRandomTaskDAG(['1', '2', '3', '4', '5'], 7),
-            ...makeRandomTaskDAG(['1', '2', '5'], 7),
-            makeRandomFixedTask('Fixed Task A', '1'),
-            makeRandomFixedTask('Fixed Task B', '2'),
-        ]
+            ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 7),
+            ...makeRandomTaskDAG(["1", "2", "5"], 7),
+            makeRandomFixedTask("Fixed Task A", "1"),
+            makeRandomFixedTask("Fixed Task B", "2"),
+        ],
     };
 }
 
@@ -131,17 +173,29 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
     _randomTaskId = _randomTaskId || 1;
     const getName = () => `Task ${_randomTaskId++}`;
     const getSwimlane = () => randChoice(swimlaneIds);
-    const tasks = [
-        makeRandomFloatingTask(getName(), swimlaneIds[0], [])
-    ];
+    const tasks = [makeRandomFloatingTask(getName(), swimlaneIds[0], [])];
     for (const id of swimlaneIds.slice(1)) {
-        tasks.push(makeRandomFloatingTask(getName(), id, [tasks[tasks.length - 1].name]));
+        tasks.push(
+            makeRandomFloatingTask(getName(), id, [
+                tasks[tasks.length - 1].name,
+            ])
+        );
     }
 
     while (tasks.length < numTasks) {
         const numParents = randChoice([0, 1, 1, 1, 1, 2]);
-        const parentIdxes = [...new Set(zeroArray(numParents).map(_ => randRange(0, tasks.length)))];
-        tasks.push(makeRandomFloatingTask(getName(), getSwimlane(), parentIdxes.map(i => tasks[i].name)));
+        const parentIdxes = [
+            ...new Set(
+                zeroArray(numParents).map(_ => randRange(0, tasks.length))
+            ),
+        ];
+        tasks.push(
+            makeRandomFloatingTask(
+                getName(),
+                getSwimlane(),
+                parentIdxes.map(i => tasks[i].name)
+            )
+        );
     }
 
     return tasks;
@@ -154,14 +208,16 @@ function setupColorSchemeWatcher(cb) {
     }
 
     let isDark = false;
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
         isDark = true;
     }
 
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-        let newIsDark = !!event.matches;
-        cb(newIsDark);
-    });
+    window
+        .matchMedia("(prefers-color-scheme: dark)")
+        .addEventListener("change", event => {
+            let newIsDark = !!event.matches;
+            cb(newIsDark);
+        });
 
     return isDark;
 }
@@ -180,7 +236,7 @@ function makeRandomFixedTask(name, swimlaneId) {
         interval: {
             start: dateToIso(addDays(START_DATE_ISO, startDays)),
             end: dateToIso(addDays(START_DATE_ISO, startDays + durationDays)),
-        }
+        },
     };
 }
 
@@ -210,11 +266,9 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
  * @returns {(() => {})[]} setStatus
  */
 function setupStatusDisplay(textElt, statuses) {
-    return statuses.map(status => (
-        () => {
-            textElt.innerText = status;
-        }
-    ));
+    return statuses.map(status => () => {
+        textElt.innerText = status;
+    });
 }
 
 /**
@@ -224,10 +278,17 @@ function setupStatusDisplay(textElt, statuses) {
  * @param {[string, string, string, string]} labels
  * @param {[string, string, string, string]} textColors
  * @param {(boolean) => Promise} action
-*/
-function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textColors, action) {
+ */
+function setupFourStateToggle(
+    checkboxElt,
+    labelElt,
+    initialValue,
+    labels,
+    textColors,
+    action
+) {
     labels = labels.slice();
-    const setText = (idx) => {
+    const setText = idx => {
         labelElt.innerText = labels[idx];
         labelElt.style.color = textColors[idx];
     };
@@ -236,41 +297,40 @@ function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textC
         await action(checked);
         setText(checked ? 3 : 1);
         setTimeout(() => setText(checked ? 0 : 2), 500);
-    }
+    };
 
     checkboxElt.checked = initialValue;
     setText(initialValue ? 0 : 2);
     labelElt.onclick = async e => {
         e.preventDefault();
         checkboxElt.checked = !checkboxElt.checked;
-        await updateState()
-    }
+        await updateState();
+    };
     checkboxElt.onchange = async e => {
         e.preventDefault();
         await updateState();
-    }
+    };
     return () => checkboxElt.checked;
 }
 
 /**
-*
-* @param {HTMLElement} button
-* @param {[string, string, string]} labels
-* @param {() => Promise} action
-*/
+ *
+ * @param {HTMLElement} button
+ * @param {[string, string, string]} labels
+ * @param {() => Promise} action
+ */
 function setupThreeStateButton(button, labels, action) {
     labels = labels.slice();
     const originalColor = button.style.color;
     const originalTextDecoration = button.style.textDecoration;
     const originalCursor = button.style.cursor;
-    const setText = (idx) => {
+    const setText = idx => {
         button.innerText = labels[idx];
         if (idx == 0) {
             button.style.textDecoration = originalTextDecoration;
             button.style.color = originalColor;
             button.style.cursor = originalCursor;
-        }
-        else {
+        } else {
             button.style.textDecoration = "none";
             button.style.color = "grey";
             button.style.cursor = "default";
@@ -283,7 +343,7 @@ function setupThreeStateButton(button, labels, action) {
         await sleep(200);
         setText(2);
         setTimeout(() => setText(0), 1000);
-    }
+    };
     setText(0);
 }
 
@@ -305,8 +365,7 @@ function pollWithTimeout(action, timeoutMs) {
             let result = false;
             try {
                 result = action();
-            }
-            catch (err) {
+            } catch (err) {
                 console.warn("Got error while polling", err);
             }
 
@@ -325,32 +384,41 @@ function pollWithTimeout(action, timeoutMs) {
     });
 }
 
+// https://stackoverflow.com/a/18650249
+function blobToBase64(blob) {
+    return new Promise((resolve, _) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+    });
+}
+
 // https://stackoverflow.com/a/35373030
-const measureText = ((() => {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
+const measureText = (() => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
 
     return function measureText(text, fontSize, font) {
-        context.font = fontSize + 'px ' + font;
+        context.font = fontSize + "px " + font;
         return context.measureText(text).width;
-    }
-})());
+    };
+})();
 
 // https://stackoverflow.com/a/47355187
-const standardizeColor = ((() => {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
+const standardizeColor = (() => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
 
     return function standardizeColor(str) {
         context.fillStyle = str;
         return context.fillStyle;
-    }
-})());
+    };
+})();
 
 // https://stackoverflow.com/a/5438011
 /** @returns {Promise<HTMLCanvasElement>} */
 async function renderAsCanvas() {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         const svg = renderTimeline(_scheduledTimeline);
         const width = svg.width.baseVal.value * 2;
         const height = svg.height.baseVal.value * 2;
@@ -358,8 +426,8 @@ async function renderAsCanvas() {
         const paddingY = 40;
         const svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
 
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
         const loader = new Image();
         loader.width = width;
         loader.height = height;
@@ -372,9 +440,9 @@ async function renderAsCanvas() {
             context.drawImage(loader, paddingX, paddingY, width, height);
             resolve(canvas);
         };
-        loader.src = 'data:image/svg+xml,' + encodeURIComponent(svgAsXML);
+        loader.src = "data:image/svg+xml," + encodeURIComponent(svgAsXML);
     });
-};
+}
 
 // https://stackoverflow.com/a/15832662
 function downloadUri(uri, name) {
@@ -389,41 +457,53 @@ function downloadUri(uri, name) {
 
 async function downloadPng() {
     const canvas = await renderAsCanvas();
-    downloadUri(canvas.toDataURL(), `${_timeline.title}.timeline.${dateToIso(new Date())}.png`);
+    downloadUri(
+        canvas.toDataURL(),
+        `${_timeline.title}.timeline.${dateToIso(new Date())}.png`
+    );
 }
 
 // https://stackoverflow.com/a/59162806
 async function copyPngToClipboard() {
-    const blob = await renderAsCanvas()
-        .then(canvas => new Promise(resolve => canvas.toBlob(resolve)));
+    const blob = await renderAsCanvas().then(
+        canvas => new Promise(resolve => canvas.toBlob(resolve))
+    );
 
     try {
         log("writing to clipboard...", blob);
-        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
     } catch (error) {
         console.error(error);
     }
 }
 
 // https://stackoverflow.com/a/65917124
-/** @param {string} url */
-function addStylesheetWithUrl(url) {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
+/**
+ * @param {string} url
+ * @param {string} fontName
+ */
+function addStylesheetWithUrl(url, fontName) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
     link.href = url;
-    document.getElementsByTagName('head')[0].appendChild(link);
+    link.id = `font-${removeNonAlphanum(fontName)}`;
+    document.getElementsByTagName("head")[0].appendChild(link);
 }
 
 /** @param {string} fontName */
 function getGFontConsent(fontName) {
     if (_hasGfontConsent === null) {
-        const result = confirm(`To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`)
+        const result = confirm(
+            `To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`
+        );
         _hasGfontConsent = `${result}`;
         window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
     }
 
-    return _hasGfontConsent === 'true';
+    return _hasGfontConsent === "true";
 }
+
+const _loadedWoff2s = {};
 
 async function loadGoogleFont() {
     if (_fontToLoad === null || _triedFonts.has(_fontToLoad)) {
@@ -436,11 +516,10 @@ async function loadGoogleFont() {
 
     const gfontConsent = getGFontConsent(fontName);
     if (gfontConsent === false) {
-        log(`not loading font '${fontName}' - previously declined`)
+        log(`not loading font '${fontName}' - previously declined`);
         return false;
-    }
-    else if (gfontConsent === true) {
-        log(`loading font '${fontName}' - previously consented`)
+    } else if (gfontConsent === true) {
+        log(`loading font '${fontName}' - previously consented`);
     }
 
     const url = `https://fonts.googleapis.com/css2?family=${fontName}`;
@@ -449,15 +528,52 @@ async function loadGoogleFont() {
         if (response.status < 200 || response.status >= 400) {
             console.warn(`Font '${fontName}' does not exist`, response.status);
         }
+
+        try {
+            let text = await response.text();
+            const replacements = await Promise.all(
+                text
+                    .split("\n")
+                    .map(t => t.split(" src: url(")[1])
+                    .filter(
+                        url =>
+                            url &&
+                            url.startsWith &&
+                            url.startsWith("https://") &&
+                            url.endsWith(") format('woff2');")
+                    )
+                    .map(raw => ({
+                        url: raw.split(") format('woff2');")[0],
+                        original: raw,
+                    }))
+                    .map(async ({ url, original }) => {
+                        const blob = await fetch(url).then(r =>
+                            r.ok ? r.blob() : null
+                        );
+                        const woff2b64 = await blobToBase64(blob);
+                        return { woff2b64, original };
+                    })
+            );
+
+            for (const { woff2b64, original } of replacements) {
+                text = text.replace(original, woff2b64 + ");");
+            }
+            _loadedWoff2s[fontName] = text;
+
+            if (!_loadedGoogleFonts.includes(fontName)) {
+                _loadedGoogleFonts.push(fontName);
+            }
+        } catch (e) {
+            console.warn("Caught exception parsing woff2", fontName, e);
+            // swallow because we can still render in browser
+            addStylesheetWithUrl(url, fontName);
+        }
     } catch (e) {
-        console.warn('Caught exception loading font', fontName, e);
+        console.warn("Caught exception loading font", fontName, e);
         return;
     }
 
-    if (!_loadedGoogleFonts.includes(fontName)) {
-        _loadedGoogleFonts.push(fontName);
-        addStylesheetWithUrl(url);
-    }
+    rerenderTimeline();
 }
 
 /** @param {string} fontName */
@@ -500,15 +616,14 @@ function clearLocalStorage() {
 function initLocalStorage() {
     if (_lastKnownJson !== null) {
         writeToLocalStorage(_lastKnownJson);
-    }
-    else {
+    } else {
         writeToLocalStorage(JSON.stringify(_timeline, null, 2));
     }
 }
 
 /** @param {Date} date */
 function dateToIso(date) {
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
 }
 
 /** @param {number} days */
@@ -531,20 +646,25 @@ function diffDays(date1, date2) {
  * @param {Date} end
  */
 function getDateRangeText(start, end) {
-    const startText = start.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        timeZone: 'UTC',
-    })
-    const endText = end.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        timeZone: 'UTC',
-    })
+    const startText = start.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+    });
+    const endText = end.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+    });
     if (startText === endText) {
         return start;
     }
     return `${startText} - ${endText}`;
+}
+
+/** @param {string} str */
+function removeNonAlphanum(str) {
+    return str.replace(/[\W_]+/g, " ");
 }
 
 /**
@@ -635,7 +755,7 @@ function parseGradient(gradient) {
 }
 
 /**
- * @param {string} color 
+ * @param {string} color
  * @returns {string?}
  */
 function getStrokeHex(color) {
@@ -668,11 +788,20 @@ function interpolateColor(components, t) {
     const idx = Math.floor(t * (components.length - 1));
     const width = 1.0 / (components.length - 1);
     const [start, end] = [components[idx], components[idx + 1]];
-    const t2 = (t - (idx * width)) / width;
+    const t2 = (t - idx * width) / width;
     return [
-        Math.max(0, Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255)),
-        Math.max(0, Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255)),
-        Math.max(0, Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255)),
+        Math.max(
+            0,
+            Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255)
+        ),
+        Math.max(
+            0,
+            Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255)
+        ),
+        Math.max(
+            0,
+            Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255)
+        ),
     ];
 }
 
@@ -687,11 +816,10 @@ function getContrastingColor(color, tBlack, tWhite) {
     tWhite = Math.max(0, Math.min(1, tWhite));
 
     const rgb = colorToRgb(color);
-    if (rgb[0] + rgb[1] + rgb[2] < (255 * 1.6)) {
+    if (rgb[0] + rgb[1] + rgb[2] < 255 * 1.6) {
         return rgbToColor(interpolateColor([color, "white"], tWhite));
     }
     return rgbToColor(interpolateColor([color, "black"], tBlack));
-
 }
 
 /**
@@ -716,11 +844,19 @@ function randChoice(arr) {
 function assertTimelineValid(timeline) {
     for (const task of timeline.tasks) {
         if (task.interval.start > task.interval.end) {
-            throw new Error(`Task '${task.id}' ('${task.name}') has start > end.`);
+            throw new Error(
+                `Task '${task.id}' ('${task.name}') has start > end.`
+            );
         }
 
-        if (!timeline.swimlanes.some(swimlane => swimlane.id === task.swimlaneId)) {
-            throw new Error(`Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`)
+        if (
+            !timeline.swimlanes.some(
+                swimlane => swimlane.id === task.swimlaneId
+            )
+        ) {
+            throw new Error(
+                `Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`
+            );
         }
     }
 }
@@ -732,13 +868,17 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
     try {
         const minAxisPadding = 8;
         const labelTextSize = 9;
-        const getXAndRadius = (c) => {
+        const getXAndRadius = c => {
             const cText = c.textContent;
             const cTransform = c.attributes.transform.value; // of the form "translate(x, y)"
-            const [_, x, y] = [...cTransform.matchAll('translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)')][0].map(parseFloat);
+            const [_, x, y] = [
+                ...cTransform.matchAll(
+                    "translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)"
+                ),
+            ][0].map(parseFloat);
             const width = measureText(cText, labelTextSize, font);
             return [x, width / 2];
-        }
+        };
 
         const toRemove = [];
         for (let i = 0; i < xAxisTicks.length - 1; i++) {
@@ -763,9 +903,8 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
         for (const elt of toRemove) {
             d3.select(elt).remove();
         }
-    }
-    catch (err) {
-        console.warn('Could not cull overlapping date labels', err);
+    } catch (err) {
+        console.warn("Could not cull overlapping date labels", err);
     }
 }
 
@@ -779,25 +918,29 @@ function renderTimeline(rawTimeline) {
     const timeline = {
         ...rawTimeline,
         tasks: rawTimeline.tasks
-            .filter(t => (rawTimeline.swimlanes || [])
-                .filter(s => s.id === t.swimlaneId)
-                .some(s => s.hidden !== true))
+            .filter(t =>
+                (rawTimeline.swimlanes || [])
+                    .filter(s => s.id === t.swimlaneId)
+                    .some(s => s.hidden !== true)
+            )
             .map(t => ({
                 ...t,
                 interval: {
                     start: new Date(t.interval.start),
                     end: new Date(t.interval.end),
-                }
+                },
             }))
             .sort((a, b) => {
-                const diff = a.interval.start.getTime() - b.interval.start.getTime();
+                const diff =
+                    a.interval.start.getTime() - b.interval.start.getTime();
                 if (diff != 0) {
                     return diff;
                 }
                 return a.interval.end.getTime() - b.interval.end.getTime();
             }),
-        swimlanes: (rawTimeline.swimlanes || [])
-            .filter(swimlane => swimlane.hidden !== true),
+        swimlanes: (rawTimeline.swimlanes || []).filter(
+            swimlane => swimlane.hidden !== true
+        ),
         config: rawTimeline.config || {},
     };
 
@@ -809,15 +952,28 @@ function renderTimeline(rawTimeline) {
         font = googleFont;
     }
 
+    const woff2Stylesheet = googleFont ? _loadedWoff2s[googleFont] : null;
+
     // if not a <generic-name>, encode as CSS <family-name> by quoting.
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
-    font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
+    // font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
 
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
-    const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
-    const [hasGradient, gradientComponents] = parseGradient(timeline.config.palette?.gradient);
-    const maskSize = parseIntOrDefault(timeline.config.palette?.stripes?.size, MASK_SIZE);
-    const maskStrength = parseIntOrDefault(timeline.config.palette?.stripes?.strength, MASK_STRENGTH);
+    const dateLabels = parseBoolOrDefault(
+        timeline.config.dateLabels,
+        DEFAULT_USE_DATE_LABELS
+    );
+    const [hasGradient, gradientComponents] = parseGradient(
+        timeline.config.palette?.gradient
+    );
+    const maskSize = parseIntOrDefault(
+        timeline.config.palette?.stripes?.size,
+        MASK_SIZE
+    );
+    const maskStrength = parseIntOrDefault(
+        timeline.config.palette?.stripes?.strength,
+        MASK_STRENGTH
+    );
     const useMask = !!timeline.config.palette?.stripes;
     const taskNameLabelTextSize = 12;
     const taskDateLabelTextSize = 10;
@@ -829,27 +985,42 @@ function renderTimeline(rawTimeline) {
     const taskLabelTextColor = "#000";
     const taskDateLabelTextColor = "#555";
     const xAxisGridColor = "#d0dce0";
-    const xAxisGridTicks = parseIntOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
+    const xAxisGridTicks = parseIntOrDefault(
+        timeline.config.gridTicks,
+        DEFAULT_GRID_TICKS
+    );
     const swimlanePadding = 5;
     const titleTextSize = timeline.title ? 16 : 0;
     const titlePaddingTop = timeline.title ? 8 : 0;
     const titlePaddingBottom = timeline.title ? 18 : 0;
-    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce((max, curr) => Math.max(measureText(curr.name, taskNameLabelTextSize, font), max), 0);
-    const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
-    const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
+    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce(
+        (max, curr) =>
+            Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
+        0
+    );
+    const chartMarginTop =
+        20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
+    const chartMarginLeft = Math.max(
+        100,
+        maxSwimlaneLabelWidth + labelPadding * 2
+    );
     const scaleMarginTop = 5;
-    const height = chartMarginTop + scaleMarginTop
-        + timeline.tasks.length * (taskHeight + taskPadding)
-        + timeline.swimlanes.length * swimlanePadding;
+    const height =
+        chartMarginTop +
+        scaleMarginTop +
+        timeline.tasks.length * (taskHeight + taskPadding) +
+        timeline.swimlanes.length * swimlanePadding;
 
     const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
         .map(task => task.interval.start)
-        .reduce((min, curr) => (!min || curr < min) ? curr : min);
+        .reduce((min, curr) => (!min || curr < min ? curr : min));
     const maxTaskDate = timeline.tasks
         .map(task => task.interval.end)
-        .reduce((max, curr) => (!max || curr > max) ? curr : max);
-    const dateScalePaddingDays = Math.ceil(diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent);
+        .reduce((max, curr) => (!max || curr > max ? curr : max));
+    const dateScalePaddingDays = Math.ceil(
+        diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent
+    );
     const minScaleDate = addDays(minTaskDate, -dateScalePaddingDays);
     const maxScaleDate = addDays(maxTaskDate, dateScalePaddingDays);
 
@@ -857,15 +1028,23 @@ function renderTimeline(rawTimeline) {
     let maxTaskLabelOverflowRight = 0;
     const numIters = 10;
     for (let iter = 0; iter < numIters; iter++) {
-        maxTaskLabelOverflowRight = timeline.tasks.map((curr) => {
-            const mainSectionSize = width - chartMarginLeft - maxTaskLabelOverflowRight;
-            const percent = (maxScaleDate - curr.interval.end) / (maxScaleDate - minScaleDate);
-            const rightEdge = percent * mainSectionSize;
+        maxTaskLabelOverflowRight = timeline.tasks
+            .map(curr => {
+                const mainSectionSize =
+                    width - chartMarginLeft - maxTaskLabelOverflowRight;
+                const percent =
+                    (maxScaleDate - curr.interval.end) /
+                    (maxScaleDate - minScaleDate);
+                const rightEdge = percent * mainSectionSize;
 
-            return measureText(curr.name, taskNameLabelTextSize, font) + textPadding
-                - rightEdge
-                + 2 // fex extra pixels just to be safe
-        }).reduce((max, curr) => curr > max ? curr : max, 0);
+                return (
+                    measureText(curr.name, taskNameLabelTextSize, font) +
+                    textPadding -
+                    rightEdge +
+                    2
+                ); // fex extra pixels just to be safe
+            })
+            .reduce((max, curr) => (curr > max ? curr : max), 0);
     }
     const chartMarginRight = maxTaskLabelOverflowRight;
 
@@ -878,7 +1057,9 @@ function renderTimeline(rawTimeline) {
             if (!colorToUse && hasGradient) {
                 let t = 0.0;
                 if (numTasksWithGradient > 1) {
-                    t = tasksWithGradientIndex * 1.0 / (numTasksWithGradient - 1.0);
+                    t =
+                        (tasksWithGradientIndex * 1.0) /
+                        (numTasksWithGradient - 1.0);
                 }
                 const rgb = interpolateColor(gradientComponents, t);
                 colorToUse = rgbToColor(rgb);
@@ -887,7 +1068,7 @@ function renderTimeline(rawTimeline) {
 
             return {
                 ...swimlane,
-                color: colorToUse
+                color: colorToUse,
             };
         })
         .map((swimlane, swimlaneIndex) => {
@@ -906,41 +1087,48 @@ function renderTimeline(rawTimeline) {
                 swimlaneIndex,
                 taskIndexOverall: cumulativeTaskIndex,
                 numTasks: tasks.length,
-            }
+            };
             cumulativeTaskIndex += tasks.length;
 
             return { tasks, swimlane: swimlaneWithCount };
         });
 
-    const svg = d3.create("svg")
+    const svg = d3
+        .create("svg")
         .attr("width", width)
         .attr("height", height)
         .attr("font-family", font)
         .style("background", "white");
 
-    const defs = svg.append('defs');
+    const defs = svg.append("defs");
     const patterns = [
         '<mask id="diagonal-stripe" width="10" height="10"> <rect x="0" y="0" width="10000" height="10000" fill="url(#diagonal-stripe-pattern)" /> </mask>',
-        `<pattern id="diagonal-stripe-pattern" patternUnits="userSpaceOnUse" width="${maskSize}" height="${maskSize}"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSdibGFjaycvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzEnLz4KPC9zdmc+" x="0" y="0" width="${maskSize}" height="${maskSize}"> </image> </pattern>`
+        `<pattern id="diagonal-stripe-pattern" patternUnits="userSpaceOnUse" width="${maskSize}" height="${maskSize}"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSdibGFjaycvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzEnLz4KPC9zdmc+" x="0" y="0" width="${maskSize}" height="${maskSize}"> </image> </pattern>`,
     ];
+    defs.html(patterns.join("\n"));
 
-    defs.html(patterns.join('\n'));
+    if (woff2Stylesheet) {
+        svg.append("style").html(woff2Stylesheet);
+    }
 
     if (timeline.title) {
-        const title = svg.append("text")
+        const title = svg
+            .append("text")
             .text(timeline.title)
             .attr("x", width / 2)
             .attr("y", titleTextSize + titlePaddingTop)
             .attr("font-size", titleTextSize)
             .attr("font-family", font)
-            .attr("text-anchor", "middle")
+            .attr("text-anchor", "middle");
     }
 
-    const dateScale = d3.scaleUtc()
+    const dateScale = d3
+        .scaleUtc()
         .domain([minScaleDate, maxScaleDate])
-        .range([chartMarginLeft, width - chartMarginRight])
+        .range([chartMarginLeft, width - chartMarginRight]);
 
-    const xAxisGrid = svg.selectAll('line.horizontalGrid')
+    const xAxisGrid = svg
+        .selectAll("line.horizontalGrid")
         .data(dateScale.ticks(xAxisGridTicks))
         .enter()
         .append("line")
@@ -948,14 +1136,15 @@ function renderTimeline(rawTimeline) {
         .attr("x2", d => dateScale(d))
         .attr("y1", chartMarginTop)
         .attr("y2", height)
-        .attr("stroke", xAxisGridColor)
+        .attr("stroke", xAxisGridColor);
 
     const xAxis = d3.axisTop(dateScale);
-    const xAxisTicks = svg.append("g")
+    const xAxisTicks = svg
+        .append("g")
         .attr("transform", `translate(0, ${chartMarginTop})`)
         .call(xAxis)
         .attr("font-family", font)
-        .selectAll('.tick');
+        .selectAll(".tick");
 
     cullOverlappingTickLabels([...xAxisTicks], font);
 
@@ -965,25 +1154,42 @@ function renderTimeline(rawTimeline) {
                 .append("rect")
                 .attr("x", d => dateScale(d.interval.start))
                 .attr("y", d => {
-                    return chartMarginTop + scaleMarginTop
-                        + (taskHeight + taskPadding) * d.taskIndexOverall
-                        + swimlanePadding * d.swimlaneIndex
-                        + (getStrokeHex(d.swimlane.color) ? 0.5 : 0);
+                    return (
+                        chartMarginTop +
+                        scaleMarginTop +
+                        (taskHeight + taskPadding) * d.taskIndexOverall +
+                        swimlanePadding * d.swimlaneIndex +
+                        (getStrokeHex(d.swimlane.color) ? 0.5 : 0)
+                    );
                 })
-                .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
-                .attr("height", d => taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0))
-                .attr("fill", d => mask ? getContrastingColor(d.swimlane.color, maskStrength, maskStrength) : d.swimlane.color)
+                .attr(
+                    "width",
+                    d => dateScale(d.interval.end) - dateScale(d.interval.start)
+                )
+                .attr(
+                    "height",
+                    d => taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0)
+                )
+                .attr("fill", d =>
+                    mask
+                        ? getContrastingColor(
+                              d.swimlane.color,
+                              maskStrength,
+                              maskStrength
+                          )
+                        : d.swimlane.color
+                )
                 .attr("stroke", d => getStrokeHex(d.swimlane.color))
-                .attr("stroke-width", d => getStrokeHex(d.swimlane.color) ? 1 : 0);
+                .attr("stroke-width", d =>
+                    getStrokeHex(d.swimlane.color) ? 1 : 0
+                );
 
             if (mask) {
-                x.attr("mask", d => getMask(d.swimlane))
+                x.attr("mask", d => getMask(d.swimlane));
             }
-        }
+        };
 
-        const rectEnter = svg.selectAll("taskbars")
-            .data(tasks)
-            .enter();
+        const rectEnter = svg.selectAll("taskbars").data(tasks).enter();
 
         appendTaskRect(rectEnter, false);
         if (useMask) {
@@ -993,15 +1199,19 @@ function renderTimeline(rawTimeline) {
         // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
         const rectTextAlignmentOffsetHackPixels = 0.75;
         // TODO: split into multiple lines on overflow
-        const taskTextLabels = svg.selectAll("tasktextlabels")
+        const taskTextLabels = svg
+            .selectAll("tasktextlabels")
             .data(tasks)
             .enter()
             .append("text")
             .attr("x", d => dateScale(d.interval.end))
             .attr("y", d => {
-                return chartMarginTop + scaleMarginTop
-                    + (taskHeight + taskPadding) * d.taskIndexOverall
-                    + swimlanePadding * d.swimlaneIndex;
+                return (
+                    chartMarginTop +
+                    scaleMarginTop +
+                    (taskHeight + taskPadding) * d.taskIndexOverall +
+                    swimlanePadding * d.swimlaneIndex
+                );
             })
             .attr("dx", textPadding)
             .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
@@ -1010,72 +1220,101 @@ function renderTimeline(rawTimeline) {
             .attr("text-anchor", "start")
             .attr("font-family", font)
             .attr("fill", taskLabelTextColor)
-            .text(d => d.name)
+            .text(d => d.name);
 
         if (dateLabels) {
             // TODO: fix overflow into left margin
-            const taskDateLabels = svg.selectAll("taskdatelabels")
+            const taskDateLabels = svg
+                .selectAll("taskdatelabels")
                 .data(tasks)
                 .enter()
                 .append("text")
                 .attr("x", d => dateScale(d.interval.start))
                 .attr("y", d => {
-                    return chartMarginTop + scaleMarginTop
-                        + (taskHeight + taskPadding) * d.taskIndexOverall
-                        + swimlanePadding * d.swimlaneIndex;
+                    return (
+                        chartMarginTop +
+                        scaleMarginTop +
+                        (taskHeight + taskPadding) * d.taskIndexOverall +
+                        swimlanePadding * d.swimlaneIndex
+                    );
                 })
                 .attr("dx", d => -dateRangePadding)
-                .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
+                .attr(
+                    "dy",
+                    d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels
+                )
                 .attr("font-size", taskDateLabelTextSize)
                 .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
                 .attr("font-family", font)
                 .attr("text-anchor", "end")
                 .attr("fill", taskDateLabelTextColor)
-                .text(d => getDateRangeText(d.interval.start, d.interval.end))
+                .text(d => getDateRangeText(d.interval.start, d.interval.end));
         }
     }
 
     const appendSwimlaneRect = (enter, mask) => {
-        let x = enter.append("rect")
-            .attr("x", d => getStrokeHex(d.color) ? 0.5 : 0)
+        let x = enter
+            .append("rect")
+            .attr("x", d => (getStrokeHex(d.color) ? 0.5 : 0))
             .attr("y", d => {
-                return chartMarginTop + scaleMarginTop
-                    + (taskHeight + taskPadding) * d.taskIndexOverall
-                    + swimlanePadding * d.swimlaneIndex;
+                return (
+                    chartMarginTop +
+                    scaleMarginTop +
+                    (taskHeight + taskPadding) * d.taskIndexOverall +
+                    swimlanePadding * d.swimlaneIndex
+                );
             })
-            .attr("width", d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0))
+            .attr(
+                "width",
+                d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0)
+            )
             .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
             .attr("stroke", d => getStrokeHex(d.color))
-            .attr("stroke-width", d => getStrokeHex(d.color) ? 1 : 0)
-            .attr("fill", d => mask ? getContrastingColor(d.color, maskStrength, maskStrength) : d.color)
+            .attr("stroke-width", d => (getStrokeHex(d.color) ? 1 : 0))
+            .attr("fill", d =>
+                mask
+                    ? getContrastingColor(d.color, maskStrength, maskStrength)
+                    : d.color
+            );
 
         if (mask) {
-            x.attr("mask", d => getMask(d))
+            x.attr("mask", d => getMask(d));
         }
-    }
+    };
 
-    const swimlaneEnter = svg.selectAll("swimlanelabel")
+    const swimlaneEnter = svg
+        .selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
-        .enter()
+        .enter();
 
     appendSwimlaneRect(swimlaneEnter, false);
     if (useMask) {
         appendSwimlaneRect(swimlaneEnter, true);
     }
 
-    const swimlaneRectLabels = svg.selectAll("swimlanelabel")
+    const swimlaneRectLabels = svg
+        .selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
         .enter()
         .append("text")
         .text(d => d.name)
         .attr("x", chartMarginLeft / 2 - 2)
         .attr("y", d => {
-            return chartMarginTop + scaleMarginTop
-                + (taskHeight + taskPadding) * d.taskIndexOverall
-                + swimlanePadding * d.swimlaneIndex;
+            return (
+                chartMarginTop +
+                scaleMarginTop +
+                (taskHeight + taskPadding) * d.taskIndexOverall +
+                swimlanePadding * d.swimlaneIndex
+            );
         })
         .attr("dx", 0)
-        .attr("dy", d => (taskHeight + taskPadding) * d.numTasks / 2 - taskPadding / 2 + taskNameLabelTextSize / 2)
+        .attr(
+            "dy",
+            d =>
+                ((taskHeight + taskPadding) * d.numTasks) / 2 -
+                taskPadding / 2 +
+                taskNameLabelTextSize / 2
+        )
         .attr("font-size", taskNameLabelTextSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("text-anchor", "middle")
@@ -1083,15 +1322,17 @@ function renderTimeline(rawTimeline) {
         .attr("fill", d => getContrastingColor(d.color, 0.8, 1.0));
 
     if (timeline.config.showDeps) {
-        const getTaskY = t => chartMarginTop + scaleMarginTop
-            + (taskHeight + taskPadding) * t.taskIndexOverall
-            + swimlanePadding * t.swimlaneIndex
-            + (taskHeight / 2);
+        const getTaskY = t =>
+            chartMarginTop +
+            scaleMarginTop +
+            (taskHeight + taskPadding) * t.taskIndexOverall +
+            swimlanePadding * t.swimlaneIndex +
+            taskHeight / 2;
 
         const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
         const deps = [];
         for (const t1 of allTasks) {
-            for (const depName of (t1.deps || [])) {
+            for (const depName of t1.deps || []) {
                 const t2 = allTasks.find(t => t.name === depName);
                 if (!t2) {
                     log("Can't find dependency?", t1, allTasks);
@@ -1101,7 +1342,8 @@ function renderTimeline(rawTimeline) {
             }
         }
 
-        const depLines = svg.selectAll("taskDep")
+        const depLines = svg
+            .selectAll("taskDep")
             .data(deps)
             .enter()
             .append("line")
@@ -1109,7 +1351,7 @@ function renderTimeline(rawTimeline) {
             .attr("x1", d => dateScale(d[0].interval.start))
             .attr("x2", d => dateScale(d[1].interval.end))
             .attr("y1", d => getTaskY(d[0]))
-            .attr("y2", d => getTaskY(d[1]))
+            .attr("y2", d => getTaskY(d[1]));
     }
 
     return svg.node();
@@ -1120,23 +1362,35 @@ function renderTimeline(rawTimeline) {
  * @param {boolean} isDark
  * @param {(json: string) => { }} onAfterRender
  */
-async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfterRender) {
+async function initializeMonacoEditorAsynchronously(
+    initialJson,
+    isDark,
+    onAfterRender
+) {
     _timeline = JSON.parse(initialJson);
 
     function getTheme(_isDark) {
-        return _isDark ? 'vs-dark' : 'vs';
+        return _isDark ? "vs-dark" : "vs";
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         // This `require` is provided by monaco-editor/min/vs/loader.js.
-        require.config({ paths: { vs: 'monaco-editor/min/vs' } });
-        require(['vs/editor/editor.main'], async () => {
-            const modelUri = monaco.Uri.parse("https://garygurlaskie.com/gantt-chart-tool/internal.json");
-            const model = monaco.editor.createModel(initialJson, "json", modelUri);
+        require.config({ paths: { vs: "monaco-editor/min/vs" } });
+        require(["vs/editor/editor.main"], async () => {
+            const modelUri = monaco.Uri.parse(
+                "https://garygurlaskie.com/gantt-chart-tool/internal.json"
+            );
+            const model = monaco.editor.createModel(
+                initialJson,
+                "json",
+                modelUri
+            );
 
             log("Loading JSON schema...");
             try {
-                const jsonSchema = await fetch("schema.json").then(r => r.json());
+                const jsonSchema = await fetch("schema.json").then(r =>
+                    r.json()
+                );
                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
                     validate: true,
                     schemas: [
@@ -1144,12 +1398,12 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                             uri: "https://garygurlaskie.com/gantt-chart-tool/schema.json",
                             fileMatch: [modelUri.toString()],
                             schema: jsonSchema,
-                        }
+                        },
                     ],
                 });
                 log("Loaded JSON schema.");
             } catch (e) {
-                console.error('Failed to load JSON schema!', e);
+                console.error("Failed to load JSON schema!", e);
             }
             const editor = monaco.editor.create(monacoContainer, {
                 model: model,
@@ -1164,19 +1418,18 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                     _timeline = JSON.parse(json);
                     rerenderTimeline();
                     onAfterRender(json);
-                }
-                catch (e) {
+                } catch (e) {
                     console.warn("Exception while rendering timeline:", e);
                 }
             });
 
-            const overwriteText = (textToWrite) => {
+            const overwriteText = textToWrite => {
                 editor.getModel().setValue(textToWrite);
             };
 
-            const setTheme = (newIsDark) => {
+            const setTheme = newIsDark => {
                 monaco.editor.setTheme(getTheme(newIsDark));
-            }
+            };
 
             resolve({ overwriteText, setTheme });
         });
@@ -1185,9 +1438,9 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
 
 /** @param {string} duration */
 function parseDuration(duration) {
-    const matches = [...duration.matchAll('PT([0-9]+)D')];
+    const matches = [...duration.matchAll("PT([0-9]+)D")];
     if (matches.length != 1) {
-        throw new Exception('Invalid duration: ' + duration);
+        throw new Exception("Invalid duration: " + duration);
     }
     return parseInt(matches[0][1]);
 }
@@ -1269,8 +1522,7 @@ async function scheduleTasks(timeline) {
             try {
                 log("Attempting to load z3...");
                 _z3 = await loadz3();
-            }
-            catch (err) {
+            } catch (err) {
                 log("Failed to load z3.");
                 await sleep(backoff);
             }
@@ -1287,12 +1539,16 @@ async function scheduleTasks(timeline) {
         durationDays: t.duration
             ? parseDuration(t.duration)
             : getDuration(t.interval.start, t.interval.end),
-        fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
-        fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
+        fixedStartDateDays: t.interval
+            ? diffDays(baseDate, new Date(t.interval.start))
+            : null,
+        fixedEndDateDays: t.interval
+            ? diffDays(baseDate, new Date(t.interval.end))
+            : null,
         globalIndex: i,
     }));
 
-    const c = new _z3.Context('main');
+    const c = new _z3.Context("main");
     function getSolver() {
         // Modified version the constraint formulation of Job-Shop found in
         // https://smt.st/SAT_SMT_by_example.pdf (Chapter 22.8)
@@ -1301,42 +1557,53 @@ async function scheduleTasks(timeline) {
         // - extended to handle "fixed" tasks (i.e., interruptions)
 
         const solver = new c.Optimize();
-        const lengthDays = c.Int.const('lengthDays');
-        const sumDays = c.Int.const('sumDays');
+        const lengthDays = c.Int.const("lengthDays");
+        const sumDays = c.Int.const("sumDays");
 
         // these are evaluated lexicographically
         // https://microsoft.github.io/z3guide/docs/optimization/combiningobjectives
         solver.minimize(lengthDays); // primary: minimize end date of timeline
         solver.minimize(sumDays); // secondary: pick earliest start for each task
 
-        const makeVar = (...args) => args.join('_');
-        const getTaskIdx = (name) => tasks.findIndex(t => t.name === name);
-        const noOverlap = ([start1, end1], [start2, end2]) => c.Or(
-            c.GT(start1, end2),
-            c.GT(start2, end1),
-        );
-        const swimlaneIndex = (task) => timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
+        const makeVar = (...args) => args.join("_");
+        const getTaskIdx = name => tasks.findIndex(t => t.name === name);
+        const noOverlap = ([start1, end1], [start2, end2]) =>
+            c.Or(c.GT(start1, end2), c.GT(start2, end1));
+        const swimlaneIndex = task =>
+            timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
 
-        const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'start')));
-        const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, 'end')));
-        const til_present = timeline.swimlanes.map(s => zeroArray(s.maxParallelism || 1).map(_ => ({})));
-        const til_start = timeline.swimlanes.map(s => zeroArray(s.maxParallelism || 1).map(_ => ({})));
-        const til_end = timeline.swimlanes.map(s => zeroArray(s.maxParallelism || 1).map(_ => ({})));
+        const ti_start = tasks.map((task, i) =>
+            c.Int.const(makeVar(task, i, "start"))
+        );
+        const ti_end = tasks.map((task, i) =>
+            c.Int.const(makeVar(task, i, "end"))
+        );
+        const til_present = timeline.swimlanes.map(s =>
+            zeroArray(s.maxParallelism || 1).map(_ => ({}))
+        );
+        const til_start = timeline.swimlanes.map(s =>
+            zeroArray(s.maxParallelism || 1).map(_ => ({}))
+        );
+        const til_end = timeline.swimlanes.map(s =>
+            zeroArray(s.maxParallelism || 1).map(_ => ({}))
+        );
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
             if (task.fixedStartDateDays) {
-                solver.add(c.And(
-                    c.Eq(ti_start[i], task.fixedStartDateDays),
-                    c.Eq(ti_end[i], task.fixedEndDateDays)));
-            }
-            else {
+                solver.add(
+                    c.And(
+                        c.Eq(ti_start[i], task.fixedStartDateDays),
+                        c.Eq(ti_end[i], task.fixedEndDateDays)
+                    )
+                );
+            } else {
                 solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
                 solver.add(c.GE(ti_start[i], 0));
 
                 solver.add(c.LE(ti_end[i], lengthDays));
             }
 
-            for (const d of (task.deps || [])) {
+            for (const d of task.deps || []) {
                 const j = getTaskIdx(d);
                 solver.add(c.GT(ti_start[i], ti_end[j]));
             }
@@ -1345,15 +1612,30 @@ async function scheduleTasks(timeline) {
             const swimlane = timeline.swimlanes[s];
             const presence = [];
             for (let l = 0; l < (swimlane.maxParallelism || 1); l++) {
-                til_present[s][l][i] = c.Int.const(makeVar(task, i, l, 'present'));
-                solver.add(c.And(
-                    c.GE(til_present[s][l][i], 0),
-                    c.LE(til_present[s][l][i], 1)));
-                til_start[s][l][i] = c.Int.const(makeVar(task, i, l, 'start'));
-                til_end[s][l][i] = c.Int.const(makeVar(task, i, l, 'end'));
+                til_present[s][l][i] = c.Int.const(
+                    makeVar(task, i, l, "present")
+                );
+                solver.add(
+                    c.And(
+                        c.GE(til_present[s][l][i], 0),
+                        c.LE(til_present[s][l][i], 1)
+                    )
+                );
+                til_start[s][l][i] = c.Int.const(makeVar(task, i, l, "start"));
+                til_end[s][l][i] = c.Int.const(makeVar(task, i, l, "end"));
 
-                solver.add(c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_start[s][l][i], ti_start[i])));
-                solver.add(c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_end[s][l][i], ti_end[i])));
+                solver.add(
+                    c.Implies(
+                        c.Eq(til_present[s][l][i], 1),
+                        c.Eq(til_start[s][l][i], ti_start[i])
+                    )
+                );
+                solver.add(
+                    c.Implies(
+                        c.Eq(til_present[s][l][i], 1),
+                        c.Eq(til_end[s][l][i], ti_end[i])
+                    )
+                );
 
                 presence.push(til_present[s][l][i]);
             }
@@ -1378,13 +1660,20 @@ async function scheduleTasks(timeline) {
                             c.Implies(
                                 c.And(
                                     c.Eq(t_present[t1.globalIndex], 1),
-                                    c.Eq(t_present[t2.globalIndex], 1),
+                                    c.Eq(t_present[t2.globalIndex], 1)
                                 ),
                                 noOverlap(
-                                    [t_start[t1.globalIndex], t_end[t1.globalIndex]],
-                                    [t_start[t2.globalIndex], t_end[t2.globalIndex]])
-                            ));
-
+                                    [
+                                        t_start[t1.globalIndex],
+                                        t_end[t1.globalIndex],
+                                    ],
+                                    [
+                                        t_start[t2.globalIndex],
+                                        t_end[t2.globalIndex],
+                                    ]
+                                )
+                            )
+                        );
                     }
                 }
             }
@@ -1399,15 +1688,15 @@ async function scheduleTasks(timeline) {
         let ends;
         if (!_solutionCache[cacheKey]) {
             const logTime = timer();
-            log('configuring solver', logTime());
+            log("configuring solver", logTime());
             const [solver, ti_start, ti_end] = getSolver();
             solver.set("timeout", _globalTimeoutMs);
 
-            log('running solver...', logTime());
+            log("running solver...", logTime());
             const result = await solver.check();
 
             log(result, logTime());
-            if (result == 'unsat') {
+            if (result == "unsat") {
                 return null;
             }
             const model = solver.model();
@@ -1416,8 +1705,7 @@ async function scheduleTasks(timeline) {
 
             log(starts, ends);
             _solutionCache[cacheKey] = [starts, ends];
-        }
-        else {
+        } else {
             [starts, ends] = _solutionCache[cacheKey];
         }
 
@@ -1425,8 +1713,11 @@ async function scheduleTasks(timeline) {
             ...timeline,
             tasks: timeline.tasks.map((t, i) => ({
                 ...t,
-                interval: { start: addDays(baseDate, starts[i]), end: addDays(baseDate, ends[i]) }
-            }))
+                interval: {
+                    start: addDays(baseDate, starts[i]),
+                    end: addDays(baseDate, ends[i]),
+                },
+            })),
         };
     }
 
@@ -1439,7 +1730,10 @@ async function hackReloadWindowIfNeeded() {
     // TODO: fix coepWorker so this is not required.
     const sab = typeof SharedArrayBuffer === "undefined";
     const reload = window.sessionStorage.getItem("lastResortReload");
-    if (sab && (reload === null || (new Date().getTime() - parseInt(reload) > 15000))) {
+    if (
+        sab &&
+        (reload === null || new Date().getTime() - parseInt(reload) > 15000)
+    ) {
         log("Reloading...");
         window.sessionStorage.setItem("lastResortReload", new Date().getTime());
         window.location.reload();
@@ -1470,7 +1764,7 @@ async function flushTimeline() {
         container.append(svg);
         notifyRendered();
     } catch (e) {
-        console.error('Building timeline failed', e);
+        console.error("Building timeline failed", e);
         notifyFailed(e);
     }
 }
@@ -1503,7 +1797,7 @@ function writeOptimizedScheduleToMonaco() {
                     end: dateToIso(t.interval.end),
                 },
             })),
-        }
+        };
         const timelineJson = JSON.stringify(timelineToWrite, null, 2);
         _overwriteText(timelineJson);
         writeToLocalStorage(timelineJson);
@@ -1515,20 +1809,21 @@ function log(...args) {
 }
 
 async function main() {
-    log('running script');
+    log("running script");
 
     const [exists, storedJson] = readFromLocalStorage();
-    const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2)
-    const isDark = setupColorSchemeWatcher((isDark) => {
+    const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2);
+    const isDark = setupColorSchemeWatcher(isDark => {
         if (_setTheme) {
             _setTheme(isDark);
         }
     });
-    initializeMonacoEditorAsynchronously(jsonToUse, isDark, renderedJson => writeToLocalStorage(renderedJson))
-        .then(({ overwriteText, setTheme }) => {
-            _overwriteText = overwriteText;
-            _setTheme = setTheme;
-        });
+    initializeMonacoEditorAsynchronously(jsonToUse, isDark, renderedJson =>
+        writeToLocalStorage(renderedJson)
+    ).then(({ overwriteText, setTheme }) => {
+        _overwriteText = overwriteText;
+        _setTheme = setTheme;
+    });
     initializeTimelineWorker();
     initializeGoogleFontsWorker();
     rerenderTimeline();
