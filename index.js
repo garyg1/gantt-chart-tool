@@ -52,9 +52,9 @@ const DEFAULT_GRID_COLOR = "#d0dce0";
 const DEFAULT_PADDING_TASKHEIGHT = 15;
 const DEFAULT_PADDING_TASKS = 5;
 const DEFAULT_PADDING_SWIMLANES = 5;
-DEFAULT_TASKNAMES_FONTSIZE = 12;
-DEFAULT_TASKDATES_FONTSIZE = 10;
-DEFAULT_TITLE_FONTSIZE = 22;
+const DEFAULT_TASKNAMES_FONTSIZE = 12;
+const DEFAULT_TASKDATES_FONTSIZE = 10;
+const DEFAULT_TITLE_FONTSIZE = 22;
 const START_DATE_ISO = dateToIso(new Date());
 
 let _z3 = null;
@@ -1344,7 +1344,8 @@ function renderTimeline(rawTimeline) {
                         chartMarginTop +
                         scaleMarginTop +
                         (taskHeight + taskPadding) * d.taskIndexOverall +
-                        swimlanePadding * d.swimlaneIndex + swimlanePadding / 2 +
+                        swimlanePadding * d.swimlaneIndex +
+                        swimlanePadding / 2 +
                         (strokeHex ? 0.5 : 0),
                 )
                 .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
@@ -1384,7 +1385,8 @@ function renderTimeline(rawTimeline) {
                     chartMarginTop +
                     scaleMarginTop +
                     (taskHeight + taskPadding) * d.taskIndexOverall +
-                    swimlanePadding * d.swimlaneIndex + swimlanePadding / 2
+                    swimlanePadding * d.swimlaneIndex +
+                    swimlanePadding / 2,
             )
             .attr("dx", textPadding)
             .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
@@ -1408,7 +1410,8 @@ function renderTimeline(rawTimeline) {
                         chartMarginTop +
                         scaleMarginTop +
                         (taskHeight + taskPadding) * d.taskIndexOverall +
-                        swimlanePadding * d.swimlaneIndex + swimlanePadding / 2
+                        swimlanePadding * d.swimlaneIndex +
+                        swimlanePadding / 2
                     );
                 })
                 .attr("dx", d => -dateRangePadding)
@@ -1422,7 +1425,7 @@ function renderTimeline(rawTimeline) {
         }
     }
 
-    const swimlaneOffset = (swimlanePadding - swimlaneLabelPadding);
+    const swimlaneOffset = swimlanePadding - swimlaneLabelPadding;
     const appendSwimlaneRect = (enter, mask) => {
         let x = enter
             .append("rect")
@@ -1488,8 +1491,8 @@ function renderTimeline(rawTimeline) {
             d =>
                 ((taskHeight + taskPadding) * d.numTasks) / 2 -
                 taskPadding / 2 +
-                taskNameLabelTextSize / 2
-                + swimlaneOffset / 2,
+                taskNameLabelTextSize / 2 +
+                swimlaneOffset / 2,
         )
         .attr("font-size", taskNameLabelTextSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
