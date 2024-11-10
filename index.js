@@ -299,7 +299,7 @@ function makeSampleTimeline() {
             font: "sans-serif",
             startDate: START_DATE_ISO,
             dateLabels: true,
-            showDeps: false,
+            showDeps: true,
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 backgroundColor: "white",
@@ -327,14 +327,14 @@ function makeSampleTimeline() {
         },
         swimlanes: [
             { id: "1", name: "A", maxParallelism: 3 },
-            { id: "2", name: "B", maxParallelism: 1 },
+            { id: "2", name: "B", maxParallelism: 2 },
             { id: "3", name: "C", maxParallelism: 1, hidden: false },
             { id: "4", name: "D", maxParallelism: 1 },
             { id: "5", name: "E", maxParallelism: 2 },
         ],
         tasks: [
             ...makeRandomTaskDAG(["1", "1", "1", "2"], 4),
-            ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 11),
+            ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 12),
             makeRandomFixedTask("Fixed Task A", "1"),
             makeRandomFixedTask("Fixed Task B", "2"),
         ],

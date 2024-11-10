@@ -80,6 +80,14 @@ If we instead allocate bandwidth from swimlane "B" -> "C", the optimal solution 
 
 Although Task 4 is not blocked by Task 3, Task 2 must now wait on Fixed Task A. The resulting solution is less optimal (Jan 2 vs. Dec 28 completion). Exploring headcount allocation scenarios in real time is one of the applications of this tool.
 
+The below solution is a medium size instance solved by the tool where the solution is provably optimal. The critical path is highlighted in black.
+
+![Scheduled Timeline](docs/images/Larger%20Optimal%20Schedule%20Example.png)
+
+No amount of additional resources will accelerate the May 30 completion. In fact, the allocation can be reduced by 1 in swimlane A and achieve the same result.
+
+![Scheduled Timeline](docs/images/Larger%20Optimal%20Schedule%20Example%202.png)
+
 ### Usage Examples
 The below examples are timelines scheduled and rendered by the tool. The sample project contains a graph of interdependent tasks. Some tasks are given fixed dates using `interval`. Dependencies can cross workgroup/swimlane boundaries.
 
