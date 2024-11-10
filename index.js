@@ -46,8 +46,8 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
 const DEFAULT_FONT = "sans-serif";
 const STROKE_THRESHOLD = 210;
-const MASK_STRENGTH = 0.2;
-const MASK_SIZE = 8;
+const MASK_STRENGTH = 0.15;
+const MASK_SIZE = 6;
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = "#3c5ca2";
 const START_DATE_ISO = dateToIso(new Date());
@@ -68,6 +68,7 @@ let _hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
 const _triedFonts = new Set();
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
+const _loadedWoff2s = {};
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
 const _cssFontGenericNames = [
     "serif",
@@ -143,8 +144,8 @@ function makeSampleTimeline() {
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 stripes: {
-                    size: 5,
-                    strength: 0.3,
+                    size: 6,
+                    strength: 0.15,
                 },
             },
             startDate: START_DATE_ISO,
@@ -503,8 +504,6 @@ function getGFontConsent(fontName) {
     return _hasGfontConsent === "true";
 }
 
-const _loadedWoff2s = {};
-
 async function loadGoogleFont() {
     if (_fontToLoad === null || _triedFonts.has(_fontToLoad)) {
         _fontToLoad = null;
@@ -527,6 +526,7 @@ async function loadGoogleFont() {
         const response = await fetch(url);
         if (response.status < 200 || response.status >= 400) {
             console.warn(`Font '${fontName}' does not exist`, response.status);
+            return;
         }
 
         try {
@@ -550,16 +550,18 @@ async function loadGoogleFont() {
                         const blob = await fetch(url).then(r =>
                             r.ok ? r.blob() : null,
                         );
-                        const woff2b64 = await blobToBase64(blob);
+                        const woff2b64 = blob ? await blobToBase64(blob) : null;
                         return { woff2b64, original };
                     }),
             );
 
             for (const { woff2b64, original } of replacements) {
-                text = text.replace(original, woff2b64 + ");");
+                if (woff2b64) {
+                    text = text.replace(original, woff2b64 + ");");
+                }
             }
-            _loadedWoff2s[fontName] = text;
 
+            _loadedWoff2s[fontName] = text;
             if (!_loadedGoogleFonts.includes(fontName)) {
                 _loadedGoogleFonts.push(fontName);
             }
@@ -956,7 +958,9 @@ function renderTimeline(rawTimeline) {
 
     // if not a <generic-name>, encode as CSS <family-name> by quoting.
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
-    font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
+    font = _cssFontGenericNames.includes(font.toLocaleLowerCase())
+        ? font
+        : `"${font}"`;
 
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(
@@ -1101,6 +1105,31 @@ function renderTimeline(rawTimeline) {
         .style("background", "white");
 
     const defs = svg.append("defs");
+    /**
+     * @license
+     * https://github.com/iros/patternfills/blob/master/public/sample_svg.html
+     * The MIT License (MIT)
+     *
+     * Copyright (c) 2014 Irene Ros
+     *
+     * Permission is hereby granted, free of charge, to any person obtaining a copy
+     * of this software and associated documentation files (the "Software"), to deal
+     * in the Software without restriction, including without limitation the rights
+     * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+     * copies of the Software, and to permit persons to whom the Software is
+     * furnished to do so, subject to the following conditions:
+     *
+     * The above copyright notice and this permission notice shall be included in
+     * all copies or substantial portions of the Software.
+     *
+     * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+     * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+     * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+     * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+     * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+     * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+     * THE SOFTWARE.
+     */
     const patterns = [
         '<mask id="diagonal-stripe" width="10" height="10"> <rect x="0" y="0" width="10000" height="10000" fill="url(#diagonal-stripe-pattern)" /> </mask>',
         `<pattern id="diagonal-stripe-pattern" patternUnits="userSpaceOnUse" width="${maskSize}" height="${maskSize}"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSdibGFjaycvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzEnLz4KPC9zdmc+" x="0" y="0" width="${maskSize}" height="${maskSize}"> </image> </pattern>`,
