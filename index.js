@@ -1654,6 +1654,8 @@ async function initializeMonacoEditorAsynchronously(
                 monaco.editor.setTheme(getTheme(newIsDark));
             };
 
+            // Add custom JSON formatter
+            // order is important - https://github.com/microsoft/monaco-editor/issues/3406
             monaco.languages.json.jsonDefaults.modeConfiguration.documentFormattingEdits = false;
             monaco.languages.registerDocumentFormattingEditProvider("json", {
                 provideDocumentFormattingEdits(model, options, token) {
