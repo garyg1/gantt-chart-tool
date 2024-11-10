@@ -1,0 +1,1 @@
+* Sometimes it crashes the browser tab. I'm sorry for this - I think it's a Z3-WASM issue. I haven't debugged it. Workaround is to close and reopen the tab.

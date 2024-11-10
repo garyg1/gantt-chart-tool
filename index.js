@@ -1170,7 +1170,7 @@ function renderTimeline(rawTimeline) {
         scaleMarginTop +
         timeline.tasks.length * (taskHeight + taskPadding) +
         timeline.swimlanes.length * swimlanePadding
-        + chartPaddingY;
+        + 2 * chartPaddingY;
 
     const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
@@ -1317,7 +1317,7 @@ function renderTimeline(rawTimeline) {
         .attr("x1", d => dateScale(d))
         .attr("x2", d => dateScale(d))
         .attr("y1", chartMarginTop)
-        .attr("y2", height - 2 * chartPaddingY)
+        .attr("y2", height - 2 * chartPaddingY - swimlaneLabelPadding)
         .attr("stroke", xAxisGridColor);
 
     const xAxis = d3.axisTop(dateScale);
