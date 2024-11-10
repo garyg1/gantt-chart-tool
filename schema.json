@@ -59,6 +59,20 @@
                                 }
                             }
                         },
+                        "outlines": {
+                            "description": "Options for outlines in background of rendered chart.",
+                            "type": "object",
+                            "properties": {
+                                "thresholdL1": {
+                                    "type": "number",
+                                    "description": "Threshold (L1 pixels) for outline to be triggered."
+                                },
+                                "strength": {
+                                    "type": "number",
+                                    "description": "Opacity (max 1.0) of the outline."
+                                }
+                            }
+                        },
                         "gridColor": {
                             "type": "string",
                             "format": "color",
@@ -71,6 +85,40 @@
                         }
                     },
                     "required": ["gradient"]
+                },
+                "padding": {
+                    "type": "object",
+                    "properties": {
+                        "tasks": {
+                            "type": "integer",
+                            "description": "Padding (in pixels) between tasks."
+                        },
+                        "taskHeight": {
+                            "type": "integer",
+                            "description": "Height (in pixels) of tasks."
+                        },
+                        "swimlanes": {
+                            "type": "integer",
+                            "description": "Padding (in pixels) between swimlanes."
+                        }
+                    }
+                },
+                "fontSizes": {
+                    "type": "object",
+                    "properties": {
+                        "taskNames": {
+                            "type": "integer",
+                            "description": "Font size (in pixels) for task labels."
+                        },
+                        "taskDates": {
+                            "type": "integer",
+                            "description": "Font size (in pixels) for task dates."
+                        },
+                        "title": {
+                            "type": "integer",
+                            "description": "Font size (in pixels) for the chart title."
+                        }
+                    }
                 },
                 "startDate": {
                     "type": "string",
@@ -151,10 +199,7 @@
                         "required": ["start", "end"]
                     }
                 },
-                "anyOf": [
-                    { "required": ["interval"] },
-                    { "required": ["duration"] }
-                ],
+                "anyOf": [{ "required": ["interval"] }, { "required": ["duration"] }],
                 "required": ["name", "swimlaneId"]
             }
         }

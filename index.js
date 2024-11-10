@@ -49,6 +49,12 @@ const MASK_SIZE = 6;
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = "#3c5ca2";
 const DEFAULT_GRID_COLOR = "#d0dce0";
+const DEFAULT_PADDING_TASKHEIGHT = 15;
+const DEFAULT_PADDING_TASKS = 5;
+const DEFAULT_PADDING_SWIMLANES = 5;
+DEFAULT_TASKNAMES_FONTSIZE = 12;
+DEFAULT_TASKDATES_FONTSIZE = 10;
+DEFAULT_TITLE_FONTSIZE = 22;
 const START_DATE_ISO = dateToIso(new Date());
 
 let _z3 = null;
@@ -286,10 +292,11 @@ function makeSampleTimeline() {
     return {
         title: "Project A",
         config: {
-            dateLabels: true,
-            showDeps: false,
             width: 800,
             font: "sans-serif",
+            startDate: START_DATE_ISO,
+            dateLabels: true,
+            showDeps: false,
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 backgroundColor: "white",
@@ -298,8 +305,21 @@ function makeSampleTimeline() {
                     strength: 0.15,
                 },
                 gridColor: DEFAULT_GRID_COLOR,
+                outlines: {
+                    thresholdL1: STROKE_THRESHOLD,
+                    strength: STROKE_DARKNESS,
+                },
             },
-            startDate: START_DATE_ISO,
+            padding: {
+                tasks: DEFAULT_PADDING_TASKS,
+                taskHeight: DEFAULT_PADDING_TASKHEIGHT,
+                swimlanes: DEFAULT_PADDING_SWIMLANES,
+            },
+            fontSizes: {
+                taskNames: DEFAULT_TASKNAMES_FONTSIZE,
+                taskDates: DEFAULT_TASKDATES_FONTSIZE,
+                title: DEFAULT_TITLE_FONTSIZE,
+            },
         },
         swimlanes: [
             { id: "1", name: "A", maxParallelism: 3 },
@@ -893,9 +913,9 @@ function parseGradient(gradient) {
  * @param {string} color
  * @returns {string?}
  */
-function getStrokeHex(color, backgroundColor) {
-    if (!doColorsHaveSufficientContrastForGraphics(color, backgroundColor)) {
-        return getContrastingColor(color, STROKE_DARKNESS, STROKE_DARKNESS, backgroundColor);
+function getStrokeHex(color, backgroundColor, strokeDarkness, strokeThresholdL1) {
+    if (!doColorsHaveSufficientContrastForGraphics(color, backgroundColor, strokeThresholdL1)) {
+        return getContrastingColor(color, strokeDarkness, strokeDarkness, backgroundColor);
     }
     return null;
 }
@@ -930,13 +950,13 @@ function interpolateColor(components, t) {
     ];
 }
 
-function doColorsHaveSufficientContrastForGraphics(color1, color2) {
+function doColorsHaveSufficientContrastForGraphics(color1, color2, strokeThresholdL1) {
     const rgb1 = colorToRgb(color1);
     const rgb2 = colorToRgb(color2);
     // L1 metric IDK?
     const score =
         Math.abs(rgb1[0] - rgb2[0]) + Math.abs(rgb1[1] - rgb2[1]) + Math.abs(rgb1[2] - rgb2[2]);
-    return score >= MIN_CONTRAST_L1;
+    return score >= strokeThresholdL1;
 }
 
 /**
@@ -1101,13 +1121,26 @@ function renderTimeline(rawTimeline) {
         MASK_STRENGTH,
     );
     const useMask = !!timeline.config.palette?.stripes;
-    const taskNameLabelTextSize = 12;
-    const taskDateLabelTextSize = 10;
+    const strokeThresholdL1 = parseIntOrDefault(
+        timeline.config.palette?.outlines?.thresholdL1,
+        STROKE_THRESHOLD,
+    );
+    const strokeDarkness = parseIntOrDefault(
+        timeline.config.palette?.outlines?.strength,
+        STROKE_DARKNESS,
+    );
+    const taskNameLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.taskNames, 12);
+    const taskDateLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.taskDates, 10);
+    const titleTextSize = timeline.title
+        ? parseIntOrDefault(timeline.config.fontSizes?.title, 20)
+        : 0;
+
     const textPadding = 6;
     const labelPadding = 12;
     const dateRangePadding = 6;
-    const taskHeight = 15;
-    const taskPadding = 5;
+    const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
+    const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
+    const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
     const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
     const defaultGridColor = getContrastingColor(backgroundColor, 0.15, 0.25);
     const xAxisGridColor = parseStringOrDefault(
@@ -1118,8 +1151,6 @@ function renderTimeline(rawTimeline) {
     const titleTextColor = taskLabelTextColor;
     const taskDateLabelTextColor = getContrastingColor(backgroundColor, 0.55, 0.6);
     const xAxisGridTicks = parseIntOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
-    const swimlanePadding = 5;
-    const titleTextSize = timeline.title ? 16 : 0;
     const titlePaddingTop = timeline.title ? 8 : 0;
     const titlePaddingBottom = timeline.title ? 18 : 0;
     const maxSwimlaneLabelWidth = timeline.swimlanes.reduce(
@@ -1296,6 +1327,12 @@ function renderTimeline(rawTimeline) {
     cullOverlappingTickLabels([...xAxisTicks], font);
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
+        const strokeHex = getStrokeHex(
+            swimlane.color,
+            backgroundColor,
+            strokeDarkness,
+            strokeThresholdL1,
+        );
         const appendTaskRect = (enter, mask) => {
             let x = enter
                 .append("rect")
@@ -1307,22 +1344,17 @@ function renderTimeline(rawTimeline) {
                         scaleMarginTop +
                         (taskHeight + taskPadding) * d.taskIndexOverall +
                         swimlanePadding * d.swimlaneIndex +
-                        (getStrokeHex(d.swimlane.color, backgroundColor) ? 0.5 : 0),
+                        (strokeHex ? 0.5 : 0),
                 )
                 .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
-                .attr(
-                    "height",
-                    d => taskHeight - (getStrokeHex(d.swimlane.color, backgroundColor) ? 0.5 : 0),
-                )
+                .attr("height", d => taskHeight - (strokeHex ? 0.5 : 0))
                 .attr("fill", d =>
                     mask
                         ? getContrastingColor(d.swimlane.color, maskStrength, maskStrength)
                         : d.swimlane.color,
                 )
-                .attr("stroke", d => getStrokeHex(d.swimlane.color, backgroundColor))
-                .attr("stroke-width", d =>
-                    getStrokeHex(d.swimlane.color, backgroundColor) ? 1 : 0,
-                );
+                .attr("stroke", d => strokeHex)
+                .attr("stroke-width", d => (strokeHex ? 1 : 0));
 
             if (mask) {
                 x.attr("mask", d => getMask(d.swimlane));
@@ -1392,7 +1424,16 @@ function renderTimeline(rawTimeline) {
     const appendSwimlaneRect = (enter, mask) => {
         let x = enter
             .append("rect")
-            .attr("x", d => (getStrokeHex(d.color, backgroundColor) ? 0.5 : 0) + chartPaddingX)
+            .datum(d => {
+                d.strokeHex = getStrokeHex(
+                    d.color,
+                    backgroundColor,
+                    strokeDarkness,
+                    strokeThresholdL1,
+                );
+                return d;
+            })
+            .attr("x", d => (d.strokeHex ? 0.5 : 0) + chartPaddingX)
             .attr("y", d => {
                 return (
                     chartMarginTop +
@@ -1401,13 +1442,10 @@ function renderTimeline(rawTimeline) {
                     swimlanePadding * d.swimlaneIndex
                 );
             })
-            .attr(
-                "width",
-                d => chartMarginLeft - 5 - (getStrokeHex(d.color, backgroundColor) ? 1 : 0),
-            )
+            .attr("width", d => chartMarginLeft - 5 - (d.strokeHex ? 1 : 0))
             .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
-            .attr("stroke", d => getStrokeHex(d.color, backgroundColor))
-            .attr("stroke-width", d => (getStrokeHex(d.color, backgroundColor) ? 1 : 0))
+            .attr("stroke", d => d.strokeHex)
+            .attr("stroke-width", d => (d.strokeHex ? 1 : 0))
             .attr("fill", d =>
                 mask ? getContrastingColor(d.color, maskStrength, maskStrength) : d.color,
             );
