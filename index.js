@@ -33,12 +33,8 @@ const clipboardButton = document.getElementById("clipboard-button");
 const fixedIntervalsButton = document.getElementById("fixedintervals-button");
 const statusField = document.getElementById("status-field");
 const localStorageCheckbox = document.getElementById("localstorage-checkbox");
-const localStorageCheckboxLabel = document.getElementById(
-    "localstorage-checkbox-label",
-);
-const localStorageCheckboxClickArea = document.getElementById(
-    "localstorage-checkbox-clickarea",
-);
+const localStorageCheckboxLabel = document.getElementById("localstorage-checkbox-label");
+const localStorageCheckboxClickArea = document.getElementById("localstorage-checkbox-clickarea");
 
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
@@ -46,6 +42,8 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
 const DEFAULT_FONT = "sans-serif";
 const STROKE_THRESHOLD = 210;
+const MIN_CONTRAST_L1 = 80;
+const STROKE_DARKNESS = 0.25;
 const MASK_STRENGTH = 0.15;
 const MASK_SIZE = 6;
 const DEFAULT_GRID_TICKS = 20;
@@ -89,35 +87,22 @@ const _cssFontGenericNames = [
 
 setupPageLeavePrompt();
 
-setupThreeStateButton(
-    downloadButton,
-    ["Download PNG", "...", "Download started!"],
-    downloadPng,
-);
-setupThreeStateButton(
-    clipboardButton,
-    ["Copy to Clipboard", "...", "Copied!"],
-    copyPngToClipboard,
-);
+setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
+setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
 setupThreeStateButton(
     fixedIntervalsButton,
     ["Write Optimized Schedule", "...", "Written!"],
     writeOptimizedScheduleToMonaco,
 );
 
-const [
-    notifyOptimizing,
-    notifyRendering,
-    notifyRendered,
-    notifyFailed,
-    notifyTimeout,
-] = setupStatusDisplay(statusField, [
-    "Optimizing...",
-    "Rendering...",
-    "Rendered",
-    "Failed",
-    `Timed out after ${_globalTimeoutMs / 1000} sec`,
-]);
+const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout] =
+    setupStatusDisplay(statusField, [
+        "Optimizing...",
+        "Rendering...",
+        "Rendered",
+        "Failed",
+        `Timed out after ${_globalTimeoutMs / 1000} sec`,
+    ]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
     localStorageCheckbox,
@@ -169,9 +154,7 @@ function prettifyJson(object, indent, lineLength) {
     function getSingleLineLength(o) {
         let ans = 0;
         if (isArray(o)) {
-            ans = sumArray(
-                o.map(e => getSingleLineLength(e) + ARRAY_SEP.length),
-            );
+            ans = sumArray(o.map(e => getSingleLineLength(e) + ARRAY_SEP.length));
             ans += "[]".length;
             if (o.length > 0) {
                 ans -= ARRAY_SEP.length;
@@ -205,36 +188,21 @@ function prettifyJson(object, indent, lineLength) {
      * @param {boolean} forceSingleLine
      * @returns {string}
      */
-    function getPrettyRepresentation(
-        currentNode,
-        currIndent,
-        nextIndent,
-        forceSingleLine,
-    ) {
+    function getPrettyRepresentation(currentNode, currIndent, nextIndent, forceSingleLine) {
         const currLineWidth = lineLength - currIndent;
         const nextLineWidth = lineLength - nextIndent;
         if (isArray(currentNode)) {
-            if (
-                getSingleLineLength(currentNode) < currLineWidth ||
-                forceSingleLine
-            ) {
+            if (getSingleLineLength(currentNode) < currLineWidth || forceSingleLine) {
                 return [
                     "[",
-                    currentNode
-                        .map(e => getPrettyRepresentation(e, 0, 0, true))
-                        .join(ARRAY_SEP),
+                    currentNode.map(e => getPrettyRepresentation(e, 0, 0, true)).join(ARRAY_SEP),
                     "]",
                 ].join("");
-            } else if (
-                getSingleLineLength(currentNode) + indent <
-                nextLineWidth
-            ) {
+            } else if (getSingleLineLength(currentNode) + indent < nextLineWidth) {
                 return [
                     "[\n",
                     " ".repeat(nextIndent + indent),
-                    currentNode
-                        .map(e => getPrettyRepresentation(e, 0, 0, true))
-                        .join(ARRAY_SEP),
+                    currentNode.map(e => getPrettyRepresentation(e, 0, 0, true)).join(ARRAY_SEP),
                     "\n",
                     " ".repeat(nextIndent),
                     "]",
@@ -243,13 +211,7 @@ function prettifyJson(object, indent, lineLength) {
                 const ans = ["[\n"];
                 for (const e of currentNode) {
                     ans.push(" ".repeat(nextIndent + indent));
-                    ans.push(
-                        getPrettyRepresentation(
-                            e,
-                            nextIndent + indent,
-                            nextIndent + indent,
-                        ),
-                    );
+                    ans.push(getPrettyRepresentation(e, nextIndent + indent, nextIndent + indent));
                     ans.push(ARRAY_SEP);
                     ans.push("\n");
                 }
@@ -263,10 +225,7 @@ function prettifyJson(object, indent, lineLength) {
                 return ans.join("");
             }
         } else if (isObject(currentNode)) {
-            if (
-                getSingleLineLength(currentNode) < currLineWidth ||
-                forceSingleLine
-            ) {
+            if (getSingleLineLength(currentNode) < currLineWidth || forceSingleLine) {
                 return [
                     "{ ",
                     Object.entries(currentNode)
@@ -289,10 +248,7 @@ function prettifyJson(object, indent, lineLength) {
                     ans.push(
                         getPrettyRepresentation(
                             v,
-                            nextIndent +
-                                indent +
-                                JSON.stringify(k).length +
-                                OBJ_KV_SEP.length,
+                            nextIndent + indent + JSON.stringify(k).length + OBJ_KV_SEP.length,
                             nextIndent + indent,
                         ),
                     );
@@ -336,6 +292,7 @@ function makeSampleTimeline() {
             font: "sans-serif",
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
+                backgroundColor: "white",
                 stripes: {
                     size: 6,
                     strength: 0.15,
@@ -370,19 +327,13 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
     const getSwimlane = () => randChoice(swimlaneIds);
     const tasks = [makeRandomFloatingTask(getName(), swimlaneIds[0], [])];
     for (const id of swimlaneIds.slice(1)) {
-        tasks.push(
-            makeRandomFloatingTask(getName(), id, [
-                tasks[tasks.length - 1].name,
-            ]),
-        );
+        tasks.push(makeRandomFloatingTask(getName(), id, [tasks[tasks.length - 1].name]));
     }
 
     while (tasks.length < numTasks) {
         const numParents = randChoice([0, 1, 1, 1, 1, 2]);
         const parentIdxes = [
-            ...new Set(
-                zeroArray(numParents).map(_ => randRange(0, tasks.length)),
-            ),
+            ...new Set(zeroArray(numParents).map(_ => randRange(0, tasks.length))),
         ];
         tasks.push(
             makeRandomFloatingTask(
@@ -407,12 +358,10 @@ function setupColorSchemeWatcher(cb) {
         isDark = true;
     }
 
-    window
-        .matchMedia("(prefers-color-scheme: dark)")
-        .addEventListener("change", event => {
-            let newIsDark = !!event.matches;
-            cb(newIsDark);
-        });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", event => {
+        let newIsDark = !!event.matches;
+        cb(newIsDark);
+    });
 
     return isDark;
 }
@@ -474,14 +423,7 @@ function setupStatusDisplay(textElt, statuses) {
  * @param {[string, string, string, string]} textColors
  * @param {(boolean) => Promise} action
  */
-function setupFourStateToggle(
-    checkboxElt,
-    labelElt,
-    initialValue,
-    labels,
-    textColors,
-    action,
-) {
+function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textColors, action) {
     labels = labels.slice();
     const setText = idx => {
         labelElt.innerText = labels[idx];
@@ -614,6 +556,10 @@ const standardizeColor = (() => {
 /** @returns {Promise<HTMLCanvasElement>} */
 async function renderAsCanvas() {
     return new Promise(resolve => {
+        const backgroundColor = parseStringOrDefault(
+            _scheduledTimeline.config.palette?.backgroundColor,
+            "white",
+        );
         const svg = renderTimeline(_scheduledTimeline);
         const width = svg.width.baseVal.value * 2;
         const height = svg.height.baseVal.value * 2;
@@ -630,7 +576,7 @@ async function renderAsCanvas() {
         canvas.height = height + 2 * paddingY;
 
         loader.onload = () => {
-            context.fillStyle = "white";
+            context.fillStyle = backgroundColor;
             context.fillRect(0, 0, width + 2 * paddingX, height + 2 * paddingY);
             context.drawImage(loader, paddingX, paddingY, width, height);
             resolve(canvas);
@@ -652,10 +598,7 @@ function downloadUri(uri, name) {
 
 async function downloadPng() {
     const canvas = await renderAsCanvas();
-    downloadUri(
-        canvas.toDataURL(),
-        `${_timeline.title}.timeline.${dateToIso(new Date())}.png`,
-    );
+    downloadUri(canvas.toDataURL(), `${_timeline.title}.timeline.${dateToIso(new Date())}.png`);
 }
 
 // https://stackoverflow.com/a/59162806
@@ -741,9 +684,7 @@ async function loadGoogleFont() {
                         original: raw,
                     }))
                     .map(async ({ url, original }) => {
-                        const blob = await fetch(url).then(r =>
-                            r.ok ? r.blob() : null,
-                        );
+                        const blob = await fetch(url).then(r => (r.ok ? r.blob() : null));
                         const woff2b64 = blob ? await blobToBase64(blob) : null;
                         return { woff2b64, original };
                     }),
@@ -925,11 +866,9 @@ function colorToRgb(hex) {
         return undefined;
     }
 
-    return [
-        color.substring(1, 3),
-        color.substring(3, 5),
-        color.substring(5, 7),
-    ].map(c => parseInt(c, 16));
+    return [color.substring(1, 3), color.substring(3, 5), color.substring(5, 7)].map(c =>
+        parseInt(c, 16),
+    );
 }
 
 /** @param {RGBColor} rgb */
@@ -954,10 +893,9 @@ function parseGradient(gradient) {
  * @param {string} color
  * @returns {string?}
  */
-function getStrokeHex(color) {
-    const r = colorToRgb(color);
-    if (r.every(c => c >= STROKE_THRESHOLD)) {
-        return "#aaa";
+function getStrokeHex(color, backgroundColor) {
+    if (!doColorsHaveSufficientContrastForGraphics(color, backgroundColor)) {
+        return getContrastingColor(color, STROKE_DARKNESS, STROKE_DARKNESS, backgroundColor);
     }
     return null;
 }
@@ -986,33 +924,35 @@ function interpolateColor(components, t) {
     const [start, end] = [components[idx], components[idx + 1]];
     const t2 = (t - idx * width) / width;
     return [
-        Math.max(
-            0,
-            Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255),
-        ),
-        Math.max(
-            0,
-            Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255),
-        ),
-        Math.max(
-            0,
-            Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255),
-        ),
+        Math.max(0, Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255)),
     ];
+}
+
+function doColorsHaveSufficientContrastForGraphics(color1, color2) {
+    const rgb1 = colorToRgb(color1);
+    const rgb2 = colorToRgb(color2);
+    // L1 metric IDK?
+    const score =
+        Math.abs(rgb1[0] - rgb2[0]) + Math.abs(rgb1[1] - rgb2[1]) + Math.abs(rgb1[2] - rgb2[2]);
+    return score >= MIN_CONTRAST_L1;
 }
 
 /**
  * @param {RGBColor[]} components
  * @param {number} tBlack truncated to [0, 1]
  * @param {number} tWhite truncated to [0, 1]
- * @returns {RGBColor}
  */
-function getContrastingColor(color, tBlack, tWhite) {
+function getContrastingColor(color, tBlack, tWhite, background) {
     tBlack = Math.max(0, Math.min(1, tBlack));
     tWhite = Math.max(0, Math.min(1, tWhite));
 
     const rgb = colorToRgb(color);
-    if (rgb[0] + rgb[1] + rgb[2] < 255 * 1.6) {
+    let shouldUseWhite = background
+        ? sum(colorToRgb(background)) < sum(rgb)
+        : rgb[0] + rgb[1] + rgb[2] < 255 * 1.6;
+    if (shouldUseWhite) {
         return rgbToColor(interpolateColor([color, "white"], tWhite));
     }
     return rgbToColor(interpolateColor([color, "black"], tBlack));
@@ -1024,6 +964,15 @@ function getContrastingColor(color, tBlack, tWhite) {
  */
 function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
+}
+
+/** @param {number[]} arr */
+function sum(arr) {
+    let ans = 0;
+    for (const elt of arr) {
+        ans += elt;
+    }
+    return ans;
 }
 
 /**
@@ -1040,16 +989,10 @@ function randChoice(arr) {
 function assertTimelineValid(timeline) {
     for (const task of timeline.tasks) {
         if (task.interval.start > task.interval.end) {
-            throw new Error(
-                `Task '${task.id}' ('${task.name}') has start > end.`,
-            );
+            throw new Error(`Task '${task.id}' ('${task.name}') has start > end.`);
         }
 
-        if (
-            !timeline.swimlanes.some(
-                swimlane => swimlane.id === task.swimlaneId,
-            )
-        ) {
+        if (!timeline.swimlanes.some(swimlane => swimlane.id === task.swimlaneId)) {
             throw new Error(
                 `Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`,
             );
@@ -1068,9 +1011,7 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
             const cText = c.textContent;
             const cTransform = c.attributes.transform.value; // of the form "translate(x, y)"
             const [_, x, y] = [
-                ...cTransform.matchAll(
-                    "translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)",
-                ),
+                ...cTransform.matchAll("translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)"),
             ][0].map(parseFloat);
             const width = measureText(cText, labelTextSize, font);
             return [x, width / 2];
@@ -1105,7 +1046,7 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
 }
 
 /**
- * @param {typeof _timeline} rawTimeline
+ * @param {Timeline} rawTimeline
  * @returns {SVGElement}
  */
 function renderTimeline(rawTimeline) {
@@ -1127,16 +1068,13 @@ function renderTimeline(rawTimeline) {
                 },
             }))
             .sort((a, b) => {
-                const diff =
-                    a.interval.start.getTime() - b.interval.start.getTime();
+                const diff = a.interval.start.getTime() - b.interval.start.getTime();
                 if (diff != 0) {
                     return diff;
                 }
                 return a.interval.end.getTime() - b.interval.end.getTime();
             }),
-        swimlanes: (rawTimeline.swimlanes || []).filter(
-            swimlane => swimlane.hidden !== true,
-        ),
+        swimlanes: (rawTimeline.swimlanes || []).filter(swimlane => swimlane.hidden !== true),
         config: rawTimeline.config || {},
     };
 
@@ -1152,22 +1090,12 @@ function renderTimeline(rawTimeline) {
 
     // if not a <generic-name>, encode as CSS <family-name> by quoting.
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
-    font = _cssFontGenericNames.includes(font.toLocaleLowerCase())
-        ? font
-        : `"${font}"`;
+    font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
 
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
-    const dateLabels = parseBoolOrDefault(
-        timeline.config.dateLabels,
-        DEFAULT_USE_DATE_LABELS,
-    );
-    const [hasGradient, gradientComponents] = parseGradient(
-        timeline.config.palette?.gradient,
-    );
-    const maskSize = parseIntOrDefault(
-        timeline.config.palette?.stripes?.size,
-        MASK_SIZE,
-    );
+    const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
+    const [hasGradient, gradientComponents] = parseGradient(timeline.config.palette?.gradient);
+    const maskSize = parseIntOrDefault(timeline.config.palette?.stripes?.size, MASK_SIZE);
     const maskStrength = parseIntOrDefault(
         timeline.config.palette?.stripes?.strength,
         MASK_STRENGTH,
@@ -1180,31 +1108,26 @@ function renderTimeline(rawTimeline) {
     const dateRangePadding = 6;
     const taskHeight = 15;
     const taskPadding = 5;
-    const taskLabelTextColor = "#000";
-    const taskDateLabelTextColor = "#555";
+    const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
+    const defaultGridColor = getContrastingColor(backgroundColor, 0.15, 0.25);
     const xAxisGridColor = parseStringOrDefault(
         timeline.config.palette?.gridColor,
-        DEFAULT_GRID_COLOR,
+        defaultGridColor,
     );
-    const xAxisGridTicks = parseIntOrDefault(
-        timeline.config.gridTicks,
-        DEFAULT_GRID_TICKS,
-    );
+    const taskLabelTextColor = getContrastingColor(backgroundColor, 0.9, 0.9);
+    const titleTextColor = taskLabelTextColor;
+    const taskDateLabelTextColor = getContrastingColor(backgroundColor, 0.55, 0.6);
+    const xAxisGridTicks = parseIntOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
     const swimlanePadding = 5;
     const titleTextSize = timeline.title ? 16 : 0;
     const titlePaddingTop = timeline.title ? 8 : 0;
     const titlePaddingBottom = timeline.title ? 18 : 0;
     const maxSwimlaneLabelWidth = timeline.swimlanes.reduce(
-        (max, curr) =>
-            Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
+        (max, curr) => Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
         0,
     );
-    const chartMarginTop =
-        20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
-    const chartMarginLeft = Math.max(
-        100,
-        maxSwimlaneLabelWidth + labelPadding * 2,
-    );
+    const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
+    const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
     const scaleMarginTop = 5;
     const height =
         chartMarginTop +
@@ -1231,11 +1154,8 @@ function renderTimeline(rawTimeline) {
     for (let iter = 0; iter < numIters; iter++) {
         maxTaskLabelOverflowRight = timeline.tasks
             .map(curr => {
-                const mainSectionSize =
-                    width - chartMarginLeft - maxTaskLabelOverflowRight;
-                const percent =
-                    (maxScaleDate - curr.interval.end) /
-                    (maxScaleDate - minScaleDate);
+                const mainSectionSize = width - chartMarginLeft - maxTaskLabelOverflowRight;
+                const percent = (maxScaleDate - curr.interval.end) / (maxScaleDate - minScaleDate);
                 const rightEdge = percent * mainSectionSize;
 
                 return (
@@ -1258,9 +1178,7 @@ function renderTimeline(rawTimeline) {
             if (!colorToUse && hasGradient) {
                 let t = 0.0;
                 if (numTasksWithGradient > 1) {
-                    t =
-                        (tasksWithGradientIndex * 1.0) /
-                        (numTasksWithGradient - 1.0);
+                    t = (tasksWithGradientIndex * 1.0) / (numTasksWithGradient - 1.0);
                 }
                 const rgb = interpolateColor(gradientComponents, t);
                 colorToUse = rgbToColor(rgb);
@@ -1294,12 +1212,13 @@ function renderTimeline(rawTimeline) {
             return { tasks, swimlane: swimlaneWithCount };
         });
 
+    const chartPaddingX = 5;
     const svg = d3
         .create("svg")
-        .attr("width", width)
+        .attr("width", width + chartPaddingX * 2)
         .attr("height", height)
         .attr("font-family", font)
-        .style("background", "white");
+        .style("background", backgroundColor);
 
     const defs = svg.append("defs");
     /**
@@ -1341,9 +1260,10 @@ function renderTimeline(rawTimeline) {
         const title = svg
             .append("text")
             .text(timeline.title)
-            .attr("x", width / 2)
+            .attr("x", width / 2 + chartPaddingX)
             .attr("y", titleTextSize + titlePaddingTop)
             .attr("font-size", titleTextSize)
+            .attr("fill", titleTextColor)
             .attr("font-family", font)
             .attr("text-anchor", "middle");
     }
@@ -1351,7 +1271,7 @@ function renderTimeline(rawTimeline) {
     const dateScale = d3
         .scaleUtc()
         .domain([minScaleDate, maxScaleDate])
-        .range([chartMarginLeft, width - chartMarginRight]);
+        .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX]);
 
     const xAxisGrid = svg
         .selectAll("line.horizontalGrid")
@@ -1370,6 +1290,7 @@ function renderTimeline(rawTimeline) {
         .attr("transform", `translate(0, ${chartMarginTop})`)
         .call(xAxis)
         .attr("font-family", font)
+        .attr("color", titleTextColor)
         .selectAll(".tick");
 
     cullOverlappingTickLabels([...xAxisTicks], font);
@@ -1379,37 +1300,28 @@ function renderTimeline(rawTimeline) {
             let x = enter
                 .append("rect")
                 .attr("x", d => dateScale(d.interval.start))
-                .attr("y", d => {
-                    return (
+                .attr(
+                    "y",
+                    d =>
                         chartMarginTop +
                         scaleMarginTop +
                         (taskHeight + taskPadding) * d.taskIndexOverall +
                         swimlanePadding * d.swimlaneIndex +
-                        (getStrokeHex(d.swimlane.color) ? 0.5 : 0)
-                    );
-                })
-                .attr(
-                    "width",
-                    d =>
-                        dateScale(d.interval.end) - dateScale(d.interval.start),
+                        (getStrokeHex(d.swimlane.color, backgroundColor) ? 0.5 : 0),
                 )
+                .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
                 .attr(
                     "height",
-                    d =>
-                        taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0),
+                    d => taskHeight - (getStrokeHex(d.swimlane.color, backgroundColor) ? 0.5 : 0),
                 )
                 .attr("fill", d =>
                     mask
-                        ? getContrastingColor(
-                              d.swimlane.color,
-                              maskStrength,
-                              maskStrength,
-                          )
+                        ? getContrastingColor(d.swimlane.color, maskStrength, maskStrength)
                         : d.swimlane.color,
                 )
-                .attr("stroke", d => getStrokeHex(d.swimlane.color))
+                .attr("stroke", d => getStrokeHex(d.swimlane.color, backgroundColor))
                 .attr("stroke-width", d =>
-                    getStrokeHex(d.swimlane.color) ? 1 : 0,
+                    getStrokeHex(d.swimlane.color, backgroundColor) ? 1 : 0,
                 );
 
             if (mask) {
@@ -1433,14 +1345,14 @@ function renderTimeline(rawTimeline) {
             .enter()
             .append("text")
             .attr("x", d => dateScale(d.interval.end))
-            .attr("y", d => {
-                return (
+            .attr(
+                "y",
+                d =>
                     chartMarginTop +
                     scaleMarginTop +
                     (taskHeight + taskPadding) * d.taskIndexOverall +
-                    swimlanePadding * d.swimlaneIndex
-                );
-            })
+                    swimlanePadding * d.swimlaneIndex,
+            )
             .attr("dx", textPadding)
             .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
             .attr("font-size", taskNameLabelTextSize)
@@ -1467,10 +1379,7 @@ function renderTimeline(rawTimeline) {
                     );
                 })
                 .attr("dx", d => -dateRangePadding)
-                .attr(
-                    "dy",
-                    d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels,
-                )
+                .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
                 .attr("font-size", taskDateLabelTextSize)
                 .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
                 .attr("font-family", font)
@@ -1483,7 +1392,7 @@ function renderTimeline(rawTimeline) {
     const appendSwimlaneRect = (enter, mask) => {
         let x = enter
             .append("rect")
-            .attr("x", d => (getStrokeHex(d.color) ? 0.5 : 0))
+            .attr("x", d => (getStrokeHex(d.color, backgroundColor) ? 0.5 : 0) + chartPaddingX)
             .attr("y", d => {
                 return (
                     chartMarginTop +
@@ -1494,15 +1403,13 @@ function renderTimeline(rawTimeline) {
             })
             .attr(
                 "width",
-                d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0),
+                d => chartMarginLeft - 5 - (getStrokeHex(d.color, backgroundColor) ? 1 : 0),
             )
             .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
-            .attr("stroke", d => getStrokeHex(d.color))
-            .attr("stroke-width", d => (getStrokeHex(d.color) ? 1 : 0))
+            .attr("stroke", d => getStrokeHex(d.color, backgroundColor))
+            .attr("stroke-width", d => (getStrokeHex(d.color, backgroundColor) ? 1 : 0))
             .attr("fill", d =>
-                mask
-                    ? getContrastingColor(d.color, maskStrength, maskStrength)
-                    : d.color,
+                mask ? getContrastingColor(d.color, maskStrength, maskStrength) : d.color,
             );
 
         if (mask) {
@@ -1526,15 +1433,15 @@ function renderTimeline(rawTimeline) {
         .enter()
         .append("text")
         .text(d => d.name)
-        .attr("x", chartMarginLeft / 2 - 2)
-        .attr("y", d => {
-            return (
+        .attr("x", chartMarginLeft / 2 - 2 + chartPaddingX)
+        .attr(
+            "y",
+            d =>
                 chartMarginTop +
                 scaleMarginTop +
                 (taskHeight + taskPadding) * d.taskIndexOverall +
-                swimlanePadding * d.swimlaneIndex
-            );
-        })
+                swimlanePadding * d.swimlaneIndex,
+        )
         .attr("dx", 0)
         .attr(
             "dy",
@@ -1590,11 +1497,7 @@ function renderTimeline(rawTimeline) {
  * @param {boolean} isDark
  * @param {(json: string) => { }} onAfterRender
  */
-async function initializeMonacoEditorAsynchronously(
-    initialJson,
-    isDark,
-    onAfterRender,
-) {
+async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfterRender) {
     _timeline = JSON.parse(initialJson);
 
     function getTheme(_isDark) {
@@ -1608,22 +1511,16 @@ async function initializeMonacoEditorAsynchronously(
             const modelUri = monaco.Uri.parse(
                 "https://garygurlaskie.com/gantt-chart-tool/internal.json",
             );
-            const model = monaco.editor.createModel(
-                initialJson,
-                "json",
-                modelUri,
-            );
+            const model = monaco.editor.createModel(initialJson, "json", modelUri);
 
             log("Loading JSON schema...");
             try {
-                const jsonSchema = await fetch("schema.json").then(r =>
-                    r.json(),
-                );
+                const jsonSchema = await fetch("schema.json").then(r => r.json());
                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
                     schemas: [
                         {
                             // Hardcode full path - I don't understand Monaco's behavior here
-                            uri: "https://garygurlaskie.com/gantt-chart-tool/schema.json",
+                            uri: "./schema.json",
                             fileMatch: [modelUri.toString()],
                             schema: jsonSchema,
                         },
@@ -1667,9 +1564,7 @@ async function initializeMonacoEditorAsynchronously(
                     try {
                         return [
                             {
-                                text: stringifyJson(
-                                    JSON.parse(model.getValue()),
-                                ),
+                                text: stringifyJson(JSON.parse(model.getValue())),
                                 range: model.getFullModelRange(),
                             },
                         ];
@@ -1788,12 +1683,8 @@ async function scheduleTasks(timeline) {
         durationDays: t.duration
             ? parseDuration(t.duration)
             : getDuration(t.interval.start, t.interval.end),
-        fixedStartDateDays: t.interval
-            ? diffDays(baseDate, new Date(t.interval.start))
-            : null,
-        fixedEndDateDays: t.interval
-            ? diffDays(baseDate, new Date(t.interval.end))
-            : null,
+        fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
+        fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
         globalIndex: i,
     }));
 
@@ -1818,15 +1709,10 @@ async function scheduleTasks(timeline) {
         const getTaskIdx = name => tasks.findIndex(t => t.name === name);
         const noOverlap = ([start1, end1], [start2, end2]) =>
             c.Or(c.GT(start1, end2), c.GT(start2, end1));
-        const swimlaneIndex = task =>
-            timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
+        const swimlaneIndex = task => timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
 
-        const ti_start = tasks.map((task, i) =>
-            c.Int.const(makeVar(task, i, "start")),
-        );
-        const ti_end = tasks.map((task, i) =>
-            c.Int.const(makeVar(task, i, "end")),
-        );
+        const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, "start")));
+        const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, "end")));
         const til_present = timeline.swimlanes.map(s =>
             zeroArray(s.maxParallelism || 1).map(_ => ({})),
         );
@@ -1861,29 +1747,16 @@ async function scheduleTasks(timeline) {
             const swimlane = timeline.swimlanes[s];
             const presence = [];
             for (let l = 0; l < (swimlane.maxParallelism || 1); l++) {
-                til_present[s][l][i] = c.Int.const(
-                    makeVar(task, i, l, "present"),
-                );
-                solver.add(
-                    c.And(
-                        c.GE(til_present[s][l][i], 0),
-                        c.LE(til_present[s][l][i], 1),
-                    ),
-                );
+                til_present[s][l][i] = c.Int.const(makeVar(task, i, l, "present"));
+                solver.add(c.And(c.GE(til_present[s][l][i], 0), c.LE(til_present[s][l][i], 1)));
                 til_start[s][l][i] = c.Int.const(makeVar(task, i, l, "start"));
                 til_end[s][l][i] = c.Int.const(makeVar(task, i, l, "end"));
 
                 solver.add(
-                    c.Implies(
-                        c.Eq(til_present[s][l][i], 1),
-                        c.Eq(til_start[s][l][i], ti_start[i]),
-                    ),
+                    c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_start[s][l][i], ti_start[i])),
                 );
                 solver.add(
-                    c.Implies(
-                        c.Eq(til_present[s][l][i], 1),
-                        c.Eq(til_end[s][l][i], ti_end[i]),
-                    ),
+                    c.Implies(c.Eq(til_present[s][l][i], 1), c.Eq(til_end[s][l][i], ti_end[i])),
                 );
 
                 presence.push(til_present[s][l][i]);
@@ -1912,14 +1785,8 @@ async function scheduleTasks(timeline) {
                                     c.Eq(t_present[t2.globalIndex], 1),
                                 ),
                                 noOverlap(
-                                    [
-                                        t_start[t1.globalIndex],
-                                        t_end[t1.globalIndex],
-                                    ],
-                                    [
-                                        t_start[t2.globalIndex],
-                                        t_end[t2.globalIndex],
-                                    ],
+                                    [t_start[t1.globalIndex], t_end[t1.globalIndex]],
+                                    [t_start[t2.globalIndex], t_end[t2.globalIndex]],
                                 ),
                             ),
                         );
@@ -1979,10 +1846,7 @@ async function hackReloadWindowIfNeeded() {
     // TODO: fix coepWorker so this is not required.
     const sab = typeof SharedArrayBuffer === "undefined";
     const reload = window.sessionStorage.getItem("lastResortReload");
-    if (
-        sab &&
-        (reload === null || new Date().getTime() - parseInt(reload) > 15000)
-    ) {
+    if (sab && (reload === null || new Date().getTime() - parseInt(reload) > 15000)) {
         log("Reloading...");
         window.sessionStorage.setItem("lastResortReload", new Date().getTime());
         window.location.reload();

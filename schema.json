@@ -63,6 +63,11 @@
                             "type": "string",
                             "format": "color",
                             "description": "Color of the x-axis grid lines in the background."
+                        },
+                        "backgroundColor": {
+                            "type": "string",
+                            "format": "color",
+                            "description": "Color of the chart background."
                         }
                     },
                     "required": ["gradient"]
