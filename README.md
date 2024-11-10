@@ -28,3 +28,7 @@ A rendered timeline scheduled by the tool. The sample project contains a graph o
 A confirm popup is displayed before this tool makes any external network calls (Google Fonts). The Google Fonts feature is entirely optional - you can use system fonts offline.
 
 ![Google Fonts popup displayed](docs/images/Google%20Fonts%20consent%20popup.png)
+
+This tool aims to be simple and customizable. A wide variety of styling options are available.
+
+![Another example timeline, showing different options for color configuration](docs/images/Project%20A.timeline.2024-11-11.2.png)
