@@ -290,9 +290,9 @@ function prettifyJson(object, indent, lineLength) {
                         getPrettyRepresentation(
                             v,
                             nextIndent +
-                            indent +
-                            JSON.stringify(k).length +
-                            OBJ_KV_SEP.length,
+                                indent +
+                                JSON.stringify(k).length +
+                                OBJ_KV_SEP.length,
                             nextIndent + indent,
                         ),
                     );
@@ -1182,7 +1182,10 @@ function renderTimeline(rawTimeline) {
     const taskPadding = 5;
     const taskLabelTextColor = "#000";
     const taskDateLabelTextColor = "#555";
-    const xAxisGridColor = parseStringOrDefault(timeline.config.palette?.gridColor, DEFAULT_GRID_COLOR);
+    const xAxisGridColor = parseStringOrDefault(
+        timeline.config.palette?.gridColor,
+        DEFAULT_GRID_COLOR,
+    );
     const xAxisGridTicks = parseIntOrDefault(
         timeline.config.gridTicks,
         DEFAULT_GRID_TICKS,
@@ -1398,10 +1401,10 @@ function renderTimeline(rawTimeline) {
                 .attr("fill", d =>
                     mask
                         ? getContrastingColor(
-                            d.swimlane.color,
-                            maskStrength,
-                            maskStrength,
-                        )
+                              d.swimlane.color,
+                              maskStrength,
+                              maskStrength,
+                          )
                         : d.swimlane.color,
                 )
                 .attr("stroke", d => getStrokeHex(d.swimlane.color))
