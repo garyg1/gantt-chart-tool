@@ -1368,11 +1368,13 @@ function renderTimeline(rawTimeline) {
                 )
                 .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
                 .attr("height", d => taskHeight - (strokeHex ? 0.5 : 0))
-                .attr("fill", d =>
-                    mask
-                        ? getContrastingColor(d.swimlane.color, maskStrength, maskStrength)
-                        : d.swimlane.color,
-                )
+                .attr("fill", d => {
+                    const fillColor = d.color ?? d.swimlane.color;
+                    if (mask) {
+                        return getContrastingColor(fillColor, maskStrength, maskStrength);
+                    }
+                    return fillColor;
+                })
                 .attr("stroke", d => strokeHex)
                 .attr("stroke-width", d => (strokeHex ? 1 : 0));
 
