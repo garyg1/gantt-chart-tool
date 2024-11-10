@@ -124,6 +124,8 @@ There are a lot of excellent free tools to render Gantt charts via a DSL (but no
 - [Vega implementation](https://github.com/PBI-David/Deneb-Showcase) (David Bacci)
 - [PlantUML](https://plantuml.com/gantt-diagram)
 
+A commercial tool in this area is [Microsoft Project](https://en.wikipedia.org/wiki/Microsoft_Project).
+
 The choice to create our own simple JSON DSL (rather than extend e.g., Vega) was deliberate. This tool has a single purpose. Minimizing dependencies gives us complete control. There is opportunity to make the experience simpler and clearer when we don't try to fit into a larger framework or abstraction layer, which is what this tool tries to achieve.
 
 #### Optional Google Fonts Integration
