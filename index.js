@@ -48,10 +48,11 @@ const MASK_STRENGTH = 0.15;
 const MASK_SIZE = 6;
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = "#3c5ca2";
-const DEFAULT_GRID_COLOR = "#d0dce0";
 const DEFAULT_PADDING_TASKHEIGHT = 15;
 const DEFAULT_PADDING_TASKS = 5;
 const DEFAULT_PADDING_SWIMLANES = 5;
+const DEFAULT_PADDING_CHARTX = 10;
+const DEFAULT_PADDING_CHARTY = 5;
 const DEFAULT_TASKNAMES_FONTSIZE = 12;
 const DEFAULT_TASKDATES_FONTSIZE = 10;
 const DEFAULT_TITLE_FONTSIZE = 22;
@@ -313,6 +314,8 @@ function makeSampleTimeline() {
                 tasks: DEFAULT_PADDING_TASKS,
                 taskHeight: DEFAULT_PADDING_TASKHEIGHT,
                 swimlanes: DEFAULT_PADDING_SWIMLANES,
+                chartX: DEFAULT_PADDING_CHARTX,
+                chartY: DEFAULT_PADDING_CHARTY,
             },
             fontSizes: {
                 taskNames: DEFAULT_TASKNAMES_FONTSIZE,
@@ -582,8 +585,8 @@ async function renderAsCanvas() {
         const svg = renderTimeline(_scheduledTimeline);
         const width = svg.width.baseVal.value * 2;
         const height = svg.height.baseVal.value * 2;
-        const paddingX = 40;
-        const paddingY = 40;
+        const paddingX = 0;
+        const paddingY = 0;
         const svgAsXML = new XMLSerializer().serializeToString(svg); // TODO: is this redundant?
 
         const canvas = document.createElement("canvas");
@@ -1140,9 +1143,11 @@ function renderTimeline(rawTimeline) {
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
+    const chartPaddingX = parseIntOrDefault(timeline.config.padding?.chartX, DEFAULT_PADDING_CHARTX);
+    const chartPaddingY = parseIntOrDefault(timeline.config.padding?.chartY, DEFAULT_PADDING_CHARTY);
     const swimlaneLabelPadding = 5;
     const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
-    const defaultGridColor = getContrastingColor(backgroundColor, 0.15, 0.25);
+    const defaultGridColor = getContrastingColor(backgroundColor, 0.10, 0.10);
     const xAxisGridColor = parseStringOrDefault(
         timeline.config.palette?.gridColor,
         defaultGridColor,
@@ -1157,14 +1162,15 @@ function renderTimeline(rawTimeline) {
         (max, curr) => Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
         0,
     );
-    const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
+    const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom + chartPaddingY;
     const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
     const scaleMarginTop = 5;
     const height =
         chartMarginTop +
         scaleMarginTop +
         timeline.tasks.length * (taskHeight + taskPadding) +
-        timeline.swimlanes.length * swimlanePadding;
+        timeline.swimlanes.length * swimlanePadding
+        + chartPaddingY;
 
     const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
@@ -1243,7 +1249,6 @@ function renderTimeline(rawTimeline) {
             return { tasks, swimlane: swimlaneWithCount };
         });
 
-    const chartPaddingX = 5;
     const svg = d3
         .create("svg")
         .attr("width", width + chartPaddingX * 2)
@@ -1292,7 +1297,7 @@ function renderTimeline(rawTimeline) {
             .append("text")
             .text(timeline.title)
             .attr("x", width / 2 + chartPaddingX)
-            .attr("y", titleTextSize + titlePaddingTop)
+            .attr("y", titleTextSize + titlePaddingTop + chartPaddingY)
             .attr("font-size", titleTextSize)
             .attr("fill", titleTextColor)
             .attr("font-family", font)
@@ -1312,7 +1317,7 @@ function renderTimeline(rawTimeline) {
         .attr("x1", d => dateScale(d))
         .attr("x2", d => dateScale(d))
         .attr("y1", chartMarginTop)
-        .attr("y2", height)
+        .attr("y2", height - 2 * chartPaddingY)
         .attr("stroke", xAxisGridColor);
 
     const xAxis = d3.axisTop(dateScale);
@@ -1491,7 +1496,7 @@ function renderTimeline(rawTimeline) {
                 ((taskHeight + taskPadding) * d.numTasks) / 2 -
                 taskPadding / 2 +
                 taskNameLabelTextSize / 2 +
-                swimlaneOffset / 2,
+                swimlaneOffset / 2 + 1,
         )
         .attr("font-size", taskNameLabelTextSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)

@@ -1,0 +1,126 @@
+{
+    "title": "スケジュール例",
+    "config": {
+        "width": 800,
+        "googleFont": "Noto Sans",
+        "startDate": "2024-11-10",
+        "palette": {
+            "gradient": ["#451663", "#319ee2"],
+            "backgroundColor": "#dfdce9",
+            "stripes": { "size": 6, "strength": 0.25 },
+            "outlines": { "thresholdL1": 220, "strength": 0.25 }
+        },
+        "padding": { "tasks": 3, "taskHeight": 17, "swimlanes": 15 },
+        "fontSizes": { "title": 16 }
+    },
+    "swimlanes": [
+        { "id": "1", "name": "一", "maxParallelism": 3 },
+        { "id": "2", "name": "二", "maxParallelism": 1 },
+        { "id": "3", "name": "三", "maxParallelism": 1, "hidden": false },
+        { "id": "4", "name": "四", "maxParallelism": 1 },
+        { "id": "5", "name": "五", "maxParallelism": 2 }
+    ],
+    "tasks": [
+        {
+            "name": "会議の例1",
+            "swimlaneId": "1",
+            "duration": "PT11D",
+            "deps": [],
+            "width": 1
+        },
+        {
+            "name": "会議の例2",
+            "swimlaneId": "2",
+            "duration": "PT15D",
+            "deps": ["会議の例1"],
+            "width": 1
+        },
+        {
+            "name": "会議の例3",
+            "swimlaneId": "3",
+            "duration": "PT15D",
+            "deps": ["会議の例2"],
+            "width": 1
+        },
+        {
+            "name": "会議の例4",
+            "swimlaneId": "4",
+            "duration": "PT10D",
+            "deps": ["会議の例3"]
+        },
+        {
+            "name": "会議の例5",
+            "swimlaneId": "5",
+            "duration": "PT21D",
+            "deps": ["会議の例4"],
+            "width": 1
+        },
+        {
+            "name": "会議の例6",
+            "swimlaneId": "3",
+            "duration": "PT13D",
+            "deps": ["会議の例5"],
+            "width": 1
+        },
+        {
+            "name": "会議の例7",
+            "swimlaneId": "5",
+            "duration": "PT10D",
+            "deps": []
+        },
+        {
+            "name": "会議の例8",
+            "swimlaneId": "1",
+            "duration": "PT11D",
+            "deps": []
+        },
+        {
+            "name": "会議の例9",
+            "swimlaneId": "2",
+            "duration": "PT10D",
+            "deps": ["会議の例8"]
+        },
+        {
+            "name": "会議の例10",
+            "swimlaneId": "5",
+            "duration": "PT16D",
+            "deps": ["会議の例9"]
+        },
+        {
+            "name": "会議の例11",
+            "swimlaneId": "1",
+            "duration": "PT16D",
+            "deps": ["会議の例10"],
+            "width": 1
+        },
+        {
+            "name": "会議の例12",
+            "swimlaneId": "5",
+            "duration": "PT18D",
+            "deps": ["会議の例10"]
+        },
+        {
+            "name": "会議の例13",
+            "swimlaneId": "1",
+            "duration": "PT17D",
+            "deps": []
+        },
+        {
+            "name": "会議の例14",
+            "swimlaneId": "1",
+            "duration": "PT20D",
+            "deps": ["会議の例8"],
+            "width": 1
+        },
+        {
+            "name": "修正例A",
+            "swimlaneId": "1",
+            "interval": { "start": "2024-11-29", "end": "2024-12-05" }
+        },
+        {
+            "name": "修正例B",
+            "swimlaneId": "2",
+            "interval": { "start": "2024-12-15", "end": "2025-01-20" }
+        }
+    ]
+}
