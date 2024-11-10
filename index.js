@@ -59,13 +59,13 @@ const DEFAULT_TITLE_FONTSIZE = 22;
 const START_DATE_ISO = dateToIso(new Date());
 const Z3_MAX_MEMORY_MB = "512";
 const Z3_TIMEOUT_GROWTH_RATE = 3;
+const Z3_INITIAL_TIMEOUT_MS = 2000;
 const Z3_MAX_TIMEOUT_MS = 180_000;
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
 let _timeline = makeSampleTimeline();
 let _fontToLoad = null;
-let _globalTimeoutMs = 2000;
 let _lastKnownJson = null;
 let _mutated = false;
 var _randomTaskId = 1;
@@ -74,9 +74,11 @@ let _setThemeCb = null;
 let _renderNeeded = false;
 let _scheduledTimeline = null;
 let _hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
-const _triedFonts = new Set();
+let _lastSolverCacheKey = null;
+let _lastSolverUsed = null;
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
+const _triedFonts = new Set();
 const _loadedWoff2s = {};
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
 const _cssFontGenericNames = [
@@ -105,15 +107,20 @@ setupThreeStateButton(
     writeOptimizedScheduleToMonaco,
 );
 
-const [notifyOptimizing, notifyOptimizingWithTimeout, notifyRendering, notifyRendered, notifyFailed] =
-    setupStatusDisplay(statusField, [
-        "Optimizing...",
-        /** @param {number} timeoutMs */
-        (timeoutMs) => `Optimizing (${timeoutMs.toLocaleString()}ms)...`,
-        "Rendering...",
-        "Rendered",
-        "Failed",
-    ]);
+const [
+    notifyOptimizing,
+    notifyOptimizingWithTimeout,
+    notifyRendering,
+    notifyRendered,
+    notifyFailed,
+] = setupStatusDisplay(statusField, [
+    "Optimizing...",
+    /** @param {number} timeoutMs */
+    timeoutMs => `Optimizing (${timeoutMs.toLocaleString()}ms)...`,
+    "Rendering...",
+    "Rendered",
+    "Failed",
+]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
     localStorageCheckbox,
@@ -437,10 +444,9 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
  */
 function setupStatusDisplay(textElt, statuses) {
     return statuses.map(statusOrGetStatus => (...args) => {
-        if (typeof statusOrGetStatus === 'string') {
+        if (typeof statusOrGetStatus === "string") {
             textElt.innerText = statusOrGetStatus;
-        }
-        else {
+        } else {
             textElt.innerText = statusOrGetStatus(...args);
         }
     });
@@ -1845,7 +1851,7 @@ async function scheduleTasks(timeline, onSolvingStart) {
         globalIndex: i,
     }));
 
-    function getSolver() {
+    function buildSolver() {
         // Modified version the constraint formulation of Job-Shop found in
         // https://smt.st/SAT_SMT_by_example.pdf (Chapter 22.8)
         // - binding/presence trick
@@ -1955,19 +1961,29 @@ async function scheduleTasks(timeline, onSolvingStart) {
         return [solver, ti_start, ti_end];
     }
 
+    function getOrBuildSolver(cacheKey) {
+        let currAttemptTimeout = _solutionCache[cacheKey]
+            ? _solutionCache[cacheKey][2]
+            : Z3_INITIAL_TIMEOUT_MS;
+
+        const [solver, ti_start, ti_end] =
+            cacheKey === _lastSolverCacheKey ? _lastSolverUsed : buildSolver();
+        _lastSolverCacheKey = cacheKey;
+        _lastSolverUsed = [solver, ti_start, ti_end];
+        solver.set("timeout", currAttemptTimeout);
+
+        return [..._lastSolverUsed, currAttemptTimeout];
+    }
+
     async function solve() {
         const cacheKey = getCacheKey(tasks, timeline.swimlanes);
         let starts;
         let ends;
         if (!_solutionCache[cacheKey] || _solutionCache[cacheKey][2] !== null) {
-            let currAttemptTimeout = _solutionCache[cacheKey]
-                ? _solutionCache[cacheKey][2]
-                : _globalTimeoutMs;
-
             const logTime = timer();
-            log("configuring solver", logTime(), currAttemptTimeout);
-            const [solver, ti_start, ti_end] = getSolver();
-            solver.set("timeout", currAttemptTimeout);
+            log("configuring solver...", logTime());
+            const [solver, ti_start, ti_end, currAttemptTimeout] = getOrBuildSolver(cacheKey);
+            log("configured solver.", logTime(), currAttemptTimeout);
 
             log("running solver...", logTime());
             onSolvingStart(currAttemptTimeout);
@@ -1985,10 +2001,13 @@ async function scheduleTasks(timeline, onSolvingStart) {
             log(starts, ends);
 
             // If model is not optimized, trigger a retry with 3x timeout
-            // This repeats 1/3 of the work each iteration, which is good enough.
+            // This repeats at most 1/3 of the work each iteration, which is good enough.
             let nextAttemptTimeout = null;
             if (result == "unknown" && currAttemptTimeout < Z3_MAX_TIMEOUT_MS) {
-                nextAttemptTimeout = Math.min(currAttemptTimeout * Z3_TIMEOUT_GROWTH_RATE, Z3_MAX_TIMEOUT_MS);
+                nextAttemptTimeout = Math.min(
+                    Math.floor(currAttemptTimeout * Z3_TIMEOUT_GROWTH_RATE),
+                    Z3_MAX_TIMEOUT_MS,
+                );
                 _renderNeeded = true;
             }
             _solutionCache[cacheKey] = [starts, ends, nextAttemptTimeout];
@@ -2038,8 +2057,9 @@ async function flushTimeline() {
 
     try {
         notifyOptimizing();
-        _scheduledTimeline = await scheduleTasks(_timeline,
-            (timeout) => notifyOptimizingWithTimeout(timeout));
+        _scheduledTimeline = await scheduleTasks(_timeline, timeout =>
+            notifyOptimizingWithTimeout(timeout),
+        );
 
         notifyRendering();
         const svg = renderTimeline(_scheduledTimeline);
