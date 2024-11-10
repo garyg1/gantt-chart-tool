@@ -42,6 +42,8 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
 const DEFAULT_FONT = 'sans-serif';
 const STROKE_THRESHOLD = 210;
+const MASK_STRENGTH = 0.2;
+const MASK_SIZE = 8;
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = '#3c5ca2';
 const START_DATE_ISO = dateToIso(new Date());
@@ -82,6 +84,12 @@ const isLocalStorageEnabled = setupFourStateToggle(
     [LINK_COLOR, "grey", "grey", LINK_COLOR],
     async (isOn) => isOn ? initLocalStorage() : clearLocalStorage());
 
+/**
+ * @typedef {ReturnType<makeSampleTimeline>} Timeline
+ * @typedef {Timeline['swimlanes'][0]} Swimlane
+ * @typedef {Timeline['config'][0]} Config
+ * @typedef {Timeline['tasks'][0]} Task
+ */
 function makeSampleTimeline() {
     return {
         title: 'Project A',
@@ -90,7 +98,13 @@ function makeSampleTimeline() {
             showDeps: false,
             width: 800,
             font: 'sans-serif',
-            palette: { gradient: ['#3c5ca2', 'seagreen', '#eee'] },
+            palette: {
+                gradient: ['#3c5ca2', 'seagreen', '#eee'],
+                stripes: {
+                    size: 5,
+                    strength: 0.3,
+                }
+            },
             startDate: START_DATE_ISO,
         },
         swimlanes: [
@@ -581,10 +595,14 @@ function parseDateOrDefault(maybeDateString, defaultIfNotDate) {
 
 /**
  * @typedef {[number, number, number]} RGBColor
- * @param {string} hex
+ * @param {string | RGBColor} hex
  * @returns {RGBColor}
  */
 function colorToRgb(hex) {
+    if (hex && hex.length && hex.length === 3 && Number.isInteger(hex[0])) {
+        // rgb
+        return hex;
+    }
     const color = standardizeColor(hex);
     if (!color || color.length !== 7) {
         console.warn("Failed to standardize color", hex, color);
@@ -628,12 +646,18 @@ function getStrokeHex(color) {
     return null;
 }
 
+/** @param {Swimlane} swimlane */
+function getMask(swimlane) {
+    return "url(#diagonal-stripe)";
+}
+
 /**
- * @param {RGBColor[]} components
+ * @param {(RGBColor | string)[]} components
  * @param {number} t truncated to [0, 1]
  * @returns {RGBColor}
  */
 function interpolateColor(components, t) {
+    components = components.map(colorToRgb);
     if (components.length <= 1) {
         return components[0];
     }
@@ -650,6 +674,24 @@ function interpolateColor(components, t) {
         Math.max(0, Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255)),
         Math.max(0, Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255)),
     ];
+}
+
+/**
+ * @param {RGBColor[]} components
+ * @param {number} tBlack truncated to [0, 1]
+ * @param {number} tWhite truncated to [0, 1]
+ * @returns {RGBColor}
+ */
+function getContrastingColor(color, tBlack, tWhite) {
+    tBlack = Math.max(0, Math.min(1, tBlack));
+    tWhite = Math.max(0, Math.min(1, tWhite));
+
+    const rgb = colorToRgb(color);
+    if (rgb[0] + rgb[1] + rgb[2] < (255 * 1.6)) {
+        return rgbToColor(interpolateColor([color, "white"], tWhite));
+    }
+    return rgbToColor(interpolateColor([color, "black"], tBlack));
+
 }
 
 /**
@@ -774,6 +816,9 @@ function renderTimeline(rawTimeline) {
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
     const [hasGradient, gradientComponents] = parseGradient(timeline.config.palette?.gradient);
+    const maskSize = parseIntOrDefault(timeline.config.palette?.stripes?.size, MASK_SIZE);
+    const maskStrength = parseIntOrDefault(timeline.config.palette?.stripes?.strength, MASK_STRENGTH);
+    const useMask = !!timeline.config.palette?.stripes;
     const taskNameLabelTextSize = 12;
     const taskDateLabelTextSize = 10;
     const textPadding = 6;
@@ -873,6 +918,14 @@ function renderTimeline(rawTimeline) {
         .attr("font-family", font)
         .style("background", "white");
 
+    const defs = svg.append('defs');
+    const patterns = [
+        '<mask id="diagonal-stripe" width="10" height="10"> <rect x="0" y="0" width="10000" height="10000" fill="url(#diagonal-stripe-pattern)" /> </mask>',
+        `<pattern id="diagonal-stripe-pattern" patternUnits="userSpaceOnUse" width="${maskSize}" height="${maskSize}"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSdibGFjaycvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzEnLz4KPC9zdmc+" x="0" y="0" width="${maskSize}" height="${maskSize}"> </image> </pattern>`
+    ];
+
+    defs.html(patterns.join('\n'));
+
     if (timeline.title) {
         const title = svg.append("text")
             .text(timeline.title)
@@ -907,22 +960,35 @@ function renderTimeline(rawTimeline) {
     cullOverlappingTickLabels([...xAxisTicks], font);
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
-        const taskRects = svg.selectAll("taskbars")
+        const appendTaskRect = (enter, mask) => {
+            let x = enter
+                .append("rect")
+                .attr("x", d => dateScale(d.interval.start))
+                .attr("y", d => {
+                    return chartMarginTop + scaleMarginTop
+                        + (taskHeight + taskPadding) * d.taskIndexOverall
+                        + swimlanePadding * d.swimlaneIndex
+                        + (getStrokeHex(d.swimlane.color) ? 0.5 : 0);
+                })
+                .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
+                .attr("height", d => taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0))
+                .attr("fill", d => mask ? getContrastingColor(d.swimlane.color, maskStrength, maskStrength) : d.swimlane.color)
+                .attr("stroke", d => getStrokeHex(d.swimlane.color))
+                .attr("stroke-width", d => getStrokeHex(d.swimlane.color) ? 1 : 0);
+
+            if (mask) {
+                x.attr("mask", d => getMask(d.swimlane))
+            }
+        }
+
+        const rectEnter = svg.selectAll("taskbars")
             .data(tasks)
-            .enter()
-            .append("rect")
-            .attr("x", d => dateScale(d.interval.start))
-            .attr("y", d => {
-                return chartMarginTop + scaleMarginTop
-                    + (taskHeight + taskPadding) * d.taskIndexOverall
-                    + swimlanePadding * d.swimlaneIndex
-                    + (getStrokeHex(d.swimlane.color) ? 0.5 : 0);
-            })
-            .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
-            .attr("height", d => taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0))
-            .attr("fill", d => d.swimlane.color)
-            .attr("stroke", d => getStrokeHex(d.swimlane.color))
-            .attr("stroke-width", d => getStrokeHex(d.swimlane.color) ? 1 : 0)
+            .enter();
+
+        appendTaskRect(rectEnter, false);
+        if (useMask) {
+            appendTaskRect(rectEnter, true);
+        }
 
         // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
         const rectTextAlignmentOffsetHackPixels = 0.75;
@@ -969,21 +1035,33 @@ function renderTimeline(rawTimeline) {
         }
     }
 
-    const swimlaneRects = svg.selectAll("swimlanelabel")
+    const appendSwimlaneRect = (enter, mask) => {
+        let x = enter.append("rect")
+            .attr("x", d => getStrokeHex(d.color) ? 0.5 : 0)
+            .attr("y", d => {
+                return chartMarginTop + scaleMarginTop
+                    + (taskHeight + taskPadding) * d.taskIndexOverall
+                    + swimlanePadding * d.swimlaneIndex;
+            })
+            .attr("width", d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0))
+            .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
+            .attr("stroke", d => getStrokeHex(d.color))
+            .attr("stroke-width", d => getStrokeHex(d.color) ? 1 : 0)
+            .attr("fill", d => mask ? getContrastingColor(d.color, maskStrength, maskStrength) : d.color)
+
+        if (mask) {
+            x.attr("mask", d => getMask(d))
+        }
+    }
+
+    const swimlaneEnter = svg.selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
         .enter()
-        .append("rect")
-        .attr("x", d => getStrokeHex(d.color) ? 0.5 : 0)
-        .attr("y", d => {
-            return chartMarginTop + scaleMarginTop
-                + (taskHeight + taskPadding) * d.taskIndexOverall
-                + swimlanePadding * d.swimlaneIndex;
-        })
-        .attr("width", d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0))
-        .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
-        .attr("fill", d => d.color)
-        .attr("stroke", d => getStrokeHex(d.color))
-        .attr("stroke-width", d => getStrokeHex(d.color) ? 1 : 0)
+
+    appendSwimlaneRect(swimlaneEnter, false);
+    if (useMask) {
+        appendSwimlaneRect(swimlaneEnter, true);
+    }
 
     const swimlaneRectLabels = svg.selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
@@ -1002,15 +1080,7 @@ function renderTimeline(rawTimeline) {
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("text-anchor", "middle")
         .attr("font-family", font)
-        .attr("fill", d => {
-            // ensure enough contrast
-            // rendering is low scale enough, OK to hit Canvas API
-            const rgb = colorToRgb(d.color);
-            if (rgb[0] + rgb[1] + rgb[2] < (255 * 1.6)) {
-                return "white";
-            }
-            return rgbToColor(interpolateColor([rgb, colorToRgb("black")], 0.8));
-        });
+        .attr("fill", d => getContrastingColor(d.color, 0.8, 1.0));
 
     if (timeline.config.showDeps) {
         const getTaskY = t => chartMarginTop + scaleMarginTop
