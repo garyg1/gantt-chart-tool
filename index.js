@@ -58,12 +58,13 @@ const DEFAULT_TASKDATES_FONTSIZE = 10;
 const DEFAULT_TITLE_FONTSIZE = 22;
 const START_DATE_ISO = dateToIso(new Date());
 const Z3_MAX_MEMORY_MB = "512";
+const Z3_MAX_TIMEOUT_MS = 180_000;
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
 let _timeline = makeSampleTimeline();
 let _fontToLoad = null;
-let _globalTimeoutMs = 20000;
+let _globalTimeoutMs = 2000;
 let _lastKnownJson = null;
 let _mutated = false;
 var _randomTaskId = 1;
@@ -417,7 +418,7 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
     const task = {
         name,
         swimlaneId,
-        duration: `PT${durationDays}D`,
+        duration: durationDays % 7 == 0 ? `P${durationDays / 7}W` : `P${durationDays}D`,
         deps: deps || [],
     };
     // show width = 1 as example
@@ -1644,11 +1645,95 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
 
 /** @param {string} duration */
 function parseDuration(duration) {
+    // Legacy support for invalid durations
     const matches = [...duration.matchAll("PT([0-9]+)D")];
-    if (matches.length != 1) {
-        throw new Exception("Invalid duration: " + duration);
+    if (matches.length == 1) {
+        return parseInt(matches[0][1]);
     }
-    return parseInt(matches[0][1]);
+
+    const fail = () => {
+        throw new Error("Invalid duration: " + duration);
+    };
+
+    const iso8601NumberChars = "012345678890,.".split("");
+    const numbersOnly = "012345678890".split("");
+    const separatorsOnly = ",.".split("");
+
+    const parse = chars => {
+        const components = [[]];
+        for (const char of chars) {
+            if (separatorsOnly.includes(char)) {
+                components.push([]);
+            } else if (numbersOnly.includes(char)) {
+                components[components.length - 1].push(char);
+            }
+        }
+
+        if (components.length >= 3) {
+            fail();
+        }
+
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseFloat
+        // Floats are not locale sensitive, and `.` is a valid separator in all locales.
+        return Number.parseFloat(components.map(c => c.join("")).join("."));
+    };
+
+    // Actually implement spec - https://en.wikipedia.org/wiki/ISO_8601#Durations
+    if (!duration.startsWith("P")) {
+        fail();
+    }
+    const parts = [
+        ["P", ["Y", "M", "W", "D"]],
+        ["T", ["H", "M", "S"]],
+    ];
+    const partValuesInDays = {
+        PY: 365,
+        PM: 30,
+        PW: 7,
+        PD: 1,
+        TH: 1.0 / 24.0,
+        TM: 1.0 / 24.0 / 60.0,
+        TS: 1.0 / 24.0 / 60.0 / 60.0,
+    };
+    let i = 0;
+    components = {};
+    for (const [partStart, subparts] of parts) {
+        if (duration.charAt(i) !== partStart) {
+            continue;
+        }
+        i++;
+        let subpartIdx = 0;
+        while (subpartIdx < subparts.length) {
+            const num = [];
+            while (i < duration.length) {
+                const char = duration.charAt(i);
+                if (!iso8601NumberChars.includes(char)) {
+                    break;
+                }
+                i++;
+                num.push(char);
+            }
+            const value = parse(num);
+
+            while (subpartIdx < subparts.length) {
+                const subpart = subparts[subpartIdx++];
+                if (duration.charAt(i) === subpart) {
+                    i++;
+
+                    const key = `${partStart}${subpart}`;
+                    if (components[key] !== undefined) {
+                        fail();
+                    }
+                    components[key] = value;
+                    break;
+                }
+            }
+        }
+    }
+
+    return Math.ceil(
+        sum(Object.entries(components).map(([part, value]) => partValuesInDays[part] * value)),
+    );
 }
 
 /**
@@ -1865,11 +1950,15 @@ async function scheduleTasks(timeline) {
         const cacheKey = getCacheKey(tasks, timeline.swimlanes);
         let starts;
         let ends;
-        if (!_solutionCache[cacheKey]) {
+        if (!_solutionCache[cacheKey] || _solutionCache[cacheKey][2] !== null) {
+            let currAttemptTimeout = _solutionCache[cacheKey]
+                ? _solutionCache[cacheKey][2]
+                : _globalTimeoutMs;
+
             const logTime = timer();
-            log("configuring solver", logTime());
+            log("configuring solver", logTime(), currAttemptTimeout);
             const [solver, ti_start, ti_end] = getSolver();
-            solver.set("timeout", _globalTimeoutMs);
+            solver.set("timeout", currAttemptTimeout);
 
             log("running solver...", logTime());
             const result = await solver.check();
@@ -1878,12 +1967,18 @@ async function scheduleTasks(timeline) {
             if (result == "unsat") {
                 return null;
             }
+
             const model = solver.model();
             starts = ti_start.map(x => model.eval(x).value()).map(Number);
             ends = ti_end.map(x => model.eval(x).value()).map(Number);
 
             log(starts, ends);
-            _solutionCache[cacheKey] = [starts, ends];
+            let nextAttemptTimeout = null;
+            if (result == "unknown" && currAttemptTimeout < Z3_MAX_TIMEOUT_MS) {
+                nextAttemptTimeout = Math.min(currAttemptTimeout * 3, Z3_MAX_TIMEOUT_MS);
+                _renderNeeded = true;
+            }
+            _solutionCache[cacheKey] = [starts, ends, nextAttemptTimeout];
         } else {
             [starts, ends] = _solutionCache[cacheKey];
         }
