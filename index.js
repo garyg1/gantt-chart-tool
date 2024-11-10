@@ -41,6 +41,7 @@ const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
 const DEFAULT_WIDTH = 800;
 const DEFAULT_USE_DATE_LABELS = true;
 const DEFAULT_FONT = 'sans-serif';
+const STROKE_THRESHOLD = 210;
 const DEFAULT_GRID_TICKS = 20;
 const LINK_COLOR = '#3c5ca2';
 const START_DATE_ISO = dateToIso(new Date());
@@ -54,6 +55,7 @@ let _lastKnownJson = null;
 let _mutated = false;
 var _randomTaskId = 1;
 let _overwriteText = null;
+let _setThemeCb = null;
 let _renderNeeded = false;
 let _scheduledTimeline = null;
 let _hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
@@ -88,19 +90,21 @@ function makeSampleTimeline() {
             showDeps: false,
             width: 800,
             font: 'sans-serif',
-            palette: { gradient: ['royalblue', '#2e8b57'] },
+            palette: { gradient: ['#3c5ca2', 'seagreen', '#eee'] },
             startDate: START_DATE_ISO,
         },
         swimlanes: [
             { id: '1', name: 'A', maxParallelism: 3 },
             { id: '2', name: 'B', maxParallelism: 1 },
-            { id: '3', name: 'C', maxParallelism: 2, hidden: false },
+            { id: '3', name: 'C', maxParallelism: 1, hidden: false },
+            { id: '4', name: 'D', maxParallelism: 1, },
+            { id: '5', name: 'E', maxParallelism: 2, },
         ],
         tasks: [
-            ...makeRandomTaskDAG(['1', '2', '3'], 10),
+            ...makeRandomTaskDAG(['1', '2', '3', '4', '5'], 7),
+            ...makeRandomTaskDAG(['1', '2', '5'], 7),
             makeRandomFixedTask('Fixed Task A', '1'),
-            makeRandomFixedTask('Fixed Task B', '1'),
-            makeRandomFixedTask('Fixed Task C', '3'),
+            makeRandomFixedTask('Fixed Task B', '2'),
         ]
     };
 }
@@ -114,9 +118,11 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
     const getName = () => `Task ${_randomTaskId++}`;
     const getSwimlane = () => randChoice(swimlaneIds);
     const tasks = [
-        makeRandomFloatingTask(getName(), getSwimlane(), []),
-        makeRandomFloatingTask(getName(), getSwimlane(), []),
+        makeRandomFloatingTask(getName(), swimlaneIds[0], [])
     ];
+    for (const id of swimlaneIds.slice(1)) {
+        tasks.push(makeRandomFloatingTask(getName(), id, [tasks[tasks.length - 1].name]));
+    }
 
     while (tasks.length < numTasks) {
         const numParents = randChoice([0, 1, 1, 1, 1, 2]);
@@ -125,6 +131,25 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
     }
 
     return tasks;
+}
+
+// https://stackoverflow.com/questions/56393880
+function setupColorSchemeWatcher(cb) {
+    if (!window.matchMedia) {
+        return false;
+    }
+
+    let isDark = false;
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        isDark = true;
+    }
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+        let newIsDark = !!event.matches;
+        cb(newIsDark);
+    });
+
+    return isDark;
 }
 
 /**
@@ -579,35 +604,51 @@ function rgbToColor(rgb) {
 }
 
 /**
- * @param {[string, string]} gradient
- * @returns {[boolean, RGBColor?, RGBColor?]}
+ * @param {string[]} gradient
+ * @returns {[boolean, RGBColor?[]]}
  */
 function parseGradient(gradient) {
     if (!gradient) {
         return [false, undefined, undefined];
     }
-    if (gradient.length != 2) {
-        console.warn('Could not parse gradient', gradient);
-        return [false, undefined, undefined];
-    }
 
-    const start = colorToRgb(gradient[0]);
-    const end = colorToRgb(gradient[1]);
-    return [start !== undefined && end !== undefined, start, end];
+    const components = gradient.map(colorToRgb);
+    return [components.length >= 1, components];
 }
 
 /**
- * @param {RGBColor} start
- * @param {RGBColor} end
+ * @param {string} color 
+ * @returns {string?}
+ */
+function getStrokeHex(color) {
+    const r = colorToRgb(color);
+    if (r.every(c => c >= STROKE_THRESHOLD)) {
+        return "#aaa";
+    }
+    return null;
+}
+
+/**
+ * @param {RGBColor[]} components
  * @param {number} t truncated to [0, 1]
  * @returns {RGBColor}
  */
-function interpolateColor(start, end, t) {
+function interpolateColor(components, t) {
+    if (components.length <= 1) {
+        return components[0];
+    }
     t = Math.max(0, Math.min(1, t));
+    if (t === 1.0) {
+        return components[components.length - 1];
+    }
+    const idx = Math.floor(t * (components.length - 1));
+    const width = 1.0 / (components.length - 1);
+    const [start, end] = [components[idx], components[idx + 1]];
+    const t2 = (t - (idx * width)) / width;
     return [
-        Math.max(0, Math.min(Math.round((1 - t) * start[0] + t * end[0]), 255)),
-        Math.max(0, Math.min(Math.round((1 - t) * start[1] + t * end[1]), 255)),
-        Math.max(0, Math.min(Math.round((1 - t) * start[2] + t * end[2]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255)),
+        Math.max(0, Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255)),
     ];
 }
 
@@ -732,7 +773,7 @@ function renderTimeline(rawTimeline) {
 
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
-    const [hasGradient, gradientStart, gradientEnd] = parseGradient(timeline.config.palette?.gradient);
+    const [hasGradient, gradientComponents] = parseGradient(timeline.config.palette?.gradient);
     const taskNameLabelTextSize = 12;
     const taskDateLabelTextSize = 10;
     const textPadding = 6;
@@ -783,14 +824,20 @@ function renderTimeline(rawTimeline) {
     }
     const chartMarginRight = maxTaskLabelOverflowRight;
 
-    let cumulativeTaskIndex = 0
+    let cumulativeTaskIndex = 0;
+    let tasksWithGradientIndex = 0;
+    let numTasksWithGradient = timeline.swimlanes.filter(t => !t.color).length;
     const perSwimlaneTasks = timeline.swimlanes
         .map((swimlane, swimlaneIndex, allSwimlanes) => {
             let colorToUse = swimlane.color;
             if (!colorToUse && hasGradient) {
-                const t = swimlaneIndex * 1.0 / (allSwimlanes.length - 0.99);
-                const rgb = interpolateColor(gradientStart, gradientEnd, t);
+                let t = 0.0;
+                if (numTasksWithGradient > 1) {
+                    t = tasksWithGradientIndex * 1.0 / (numTasksWithGradient - 1.0);
+                }
+                const rgb = interpolateColor(gradientComponents, t);
                 colorToUse = rgbToColor(rgb);
+                tasksWithGradientIndex += 1;
             }
 
             return {
@@ -868,11 +915,14 @@ function renderTimeline(rawTimeline) {
             .attr("y", d => {
                 return chartMarginTop + scaleMarginTop
                     + (taskHeight + taskPadding) * d.taskIndexOverall
-                    + swimlanePadding * d.swimlaneIndex;
+                    + swimlanePadding * d.swimlaneIndex
+                    + (getStrokeHex(d.swimlane.color) ? 0.5 : 0);
             })
             .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
-            .attr("height", d => taskHeight)
+            .attr("height", d => taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0))
             .attr("fill", d => d.swimlane.color)
+            .attr("stroke", d => getStrokeHex(d.swimlane.color))
+            .attr("stroke-width", d => getStrokeHex(d.swimlane.color) ? 1 : 0)
 
         // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
         const rectTextAlignmentOffsetHackPixels = 0.75;
@@ -923,15 +973,17 @@ function renderTimeline(rawTimeline) {
         .data(perSwimlaneTasks.map(p => p.swimlane))
         .enter()
         .append("rect")
-        .attr("x", 0)
+        .attr("x", d => getStrokeHex(d.color) ? 0.5 : 0)
         .attr("y", d => {
             return chartMarginTop + scaleMarginTop
                 + (taskHeight + taskPadding) * d.taskIndexOverall
                 + swimlanePadding * d.swimlaneIndex;
         })
-        .attr("width", chartMarginLeft - 5)
+        .attr("width", d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0))
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("fill", d => d.color)
+        .attr("stroke", d => getStrokeHex(d.color))
+        .attr("stroke-width", d => getStrokeHex(d.color) ? 1 : 0)
 
     const swimlaneRectLabels = svg.selectAll("swimlanelabel")
         .data(perSwimlaneTasks.map(p => p.swimlane))
@@ -957,7 +1009,7 @@ function renderTimeline(rawTimeline) {
             if (rgb[0] + rgb[1] + rgb[2] < (255 * 1.6)) {
                 return "white";
             }
-            return rgbToColor(interpolateColor(rgb, colorToRgb("black"), 0.8));
+            return rgbToColor(interpolateColor([rgb, colorToRgb("black")], 0.8));
         });
 
     if (timeline.config.showDeps) {
@@ -995,10 +1047,15 @@ function renderTimeline(rawTimeline) {
 
 /**
  * @param {string} initialJson
+ * @param {boolean} isDark
  * @param {(json: string) => { }} onAfterRender
  */
-async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) {
+async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfterRender) {
     _timeline = JSON.parse(initialJson);
+
+    function getTheme(_isDark) {
+        return _isDark ? 'vs-dark' : 'vs';
+    }
 
     return new Promise((resolve) => {
         // This `require` is provided by monaco-editor/min/vs/loader.js.
@@ -1026,6 +1083,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) 
             }
             const editor = monaco.editor.create(monacoContainer, {
                 model: model,
+                theme: getTheme(isDark),
                 minimap: { enabled: false },
             });
             _debugGlobalMonacoEditor = editor;
@@ -1046,7 +1104,11 @@ async function initializeMonacoEditorAsynchronously(initialJson, onAfterRender) 
                 editor.getModel().setValue(textToWrite);
             };
 
-            resolve(overwriteText);
+            const setTheme = (newIsDark) => {
+                monaco.editor.setTheme(getTheme(newIsDark));
+            }
+
+            resolve({ overwriteText, setTheme });
         });
     });
 }
@@ -1132,12 +1194,16 @@ function getCacheKey(tasks, swimlanes) {
  */
 async function scheduleTasks(timeline) {
     if (_z3 === null) {
-        try {
-            _z3 = await loadz3();
-        }
-        catch (err) {
-            await sleep(1000);
-            _z3 = await loadz3();
+        const backoffs = [1000, 5000, 15000];
+        for (const backoff of backoffs) {
+            try {
+                log("Attempting to load z3...");
+                _z3 = await loadz3();
+            }
+            catch (err) {
+                log("Failed to load z3.");
+                await sleep(backoff);
+            }
         }
     }
 
@@ -1383,9 +1449,15 @@ async function main() {
 
     const [exists, storedJson] = readFromLocalStorage();
     const jsonToUse = exists ? storedJson : JSON.stringify(_timeline, null, 2)
-    initializeMonacoEditorAsynchronously(jsonToUse, renderedJson => writeToLocalStorage(renderedJson))
-        .then((overwriteText) => {
+    const isDark = setupColorSchemeWatcher((isDark) => {
+        if (_setTheme) {
+            _setTheme(isDark);
+        }
+    });
+    initializeMonacoEditorAsynchronously(jsonToUse, isDark, renderedJson => writeToLocalStorage(renderedJson))
+        .then(({ overwriteText, setTheme }) => {
             _overwriteText = overwriteText;
+            _setTheme = setTheme;
         });
     initializeTimelineWorker();
     initializeGoogleFontsWorker();
