@@ -956,7 +956,7 @@ function renderTimeline(rawTimeline) {
 
     // if not a <generic-name>, encode as CSS <family-name> by quoting.
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
-    // font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
+    font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
 
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(
