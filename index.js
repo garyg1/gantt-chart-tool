@@ -57,6 +57,7 @@ const DEFAULT_TASKNAMES_FONTSIZE = 12;
 const DEFAULT_TASKDATES_FONTSIZE = 10;
 const DEFAULT_TITLE_FONTSIZE = 22;
 const START_DATE_ISO = dateToIso(new Date());
+const Z3_MAX_MEMORY_MB = "512";
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
@@ -331,8 +332,8 @@ function makeSampleTimeline() {
             { id: "5", name: "E", maxParallelism: 2 },
         ],
         tasks: [
-            ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 7),
-            ...makeRandomTaskDAG(["1", "2", "5"], 7),
+            ...makeRandomTaskDAG(["1", "1", "1", "2"], 4),
+            ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 11),
             makeRandomFixedTask("Fixed Task A", "1"),
             makeRandomFixedTask("Fixed Task B", "2"),
         ],
@@ -1027,7 +1028,7 @@ function assertTimelineValid(timeline) {
 // This is an alternative implementation.
 function cullOverlappingTickLabels(xAxisTicks, font) {
     try {
-        const minAxisPadding = 8;
+        const minAxisPadding = 7;
         const labelTextSize = 9;
         const getXAndRadius = c => {
             const cText = c.textContent;
@@ -1049,6 +1050,11 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
 
             // walk forward until we find a tick that doesn't overlap
             while (cx + cr + minAxisPadding > nx - nr) {
+                if (cr < nr) {
+                    // of the ticks, keep the larger
+                    toRemove.push(curr);
+                    break;
+                }
                 toRemove.push(adjacent);
                 i++;
                 if (i >= xAxisTicks.length - 1) {
@@ -1143,11 +1149,17 @@ function renderTimeline(rawTimeline) {
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
-    const chartPaddingX = parseIntOrDefault(timeline.config.padding?.chartX, DEFAULT_PADDING_CHARTX);
-    const chartPaddingY = parseIntOrDefault(timeline.config.padding?.chartY, DEFAULT_PADDING_CHARTY);
+    const chartPaddingX = parseIntOrDefault(
+        timeline.config.padding?.chartX,
+        DEFAULT_PADDING_CHARTX,
+    );
+    const chartPaddingY = parseIntOrDefault(
+        timeline.config.padding?.chartY,
+        DEFAULT_PADDING_CHARTY,
+    );
     const swimlaneLabelPadding = 5;
     const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
-    const defaultGridColor = getContrastingColor(backgroundColor, 0.10, 0.10);
+    const defaultGridColor = getContrastingColor(backgroundColor, 0.1, 0.1);
     const xAxisGridColor = parseStringOrDefault(
         timeline.config.palette?.gridColor,
         defaultGridColor,
@@ -1162,15 +1174,16 @@ function renderTimeline(rawTimeline) {
         (max, curr) => Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
         0,
     );
-    const chartMarginTop = 20 + titleTextSize + titlePaddingTop + titlePaddingBottom + chartPaddingY;
+    const chartMarginTop =
+        20 + titleTextSize + titlePaddingTop + titlePaddingBottom + chartPaddingY;
     const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
     const scaleMarginTop = 5;
     const height =
         chartMarginTop +
         scaleMarginTop +
         timeline.tasks.length * (taskHeight + taskPadding) +
-        timeline.swimlanes.length * swimlanePadding
-        + 2 * chartPaddingY;
+        timeline.swimlanes.length * swimlanePadding +
+        2 * chartPaddingY;
 
     const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
@@ -1496,7 +1509,8 @@ function renderTimeline(rawTimeline) {
                 ((taskHeight + taskPadding) * d.numTasks) / 2 -
                 taskPadding / 2 +
                 taskNameLabelTextSize / 2 +
-                swimlaneOffset / 2 + 1,
+                swimlaneOffset / 2 +
+                1,
         )
         .attr("font-size", taskNameLabelTextSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
@@ -1714,6 +1728,7 @@ async function scheduleTasks(timeline) {
             try {
                 log("Attempting to load z3...");
                 _z3 = await loadz3();
+                _z3.setParam("memory_high_watermark_mb", Z3_MAX_MEMORY_MB);
             } catch (err) {
                 log("Failed to load z3.");
                 await sleep(backoff);
@@ -1736,13 +1751,13 @@ async function scheduleTasks(timeline) {
         globalIndex: i,
     }));
 
-    const c = new _z3.Context("main");
     function getSolver() {
         // Modified version the constraint formulation of Job-Shop found in
         // https://smt.st/SAT_SMT_by_example.pdf (Chapter 22.8)
         // - binding/presence trick
         // - modified to work with DAG dependencies (instead of linear jobs)
         // - extended to handle "fixed" tasks (i.e., interruptions)
+        const c = new _z3.Context("main");
 
         const solver = new c.Optimize();
         const lengthDays = c.Int.const("lengthDays");

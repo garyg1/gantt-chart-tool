@@ -1,1 +1,2 @@
-* Sometimes it crashes the browser tab. I'm sorry for this - I think it's a Z3-WASM issue. I haven't debugged it. Workaround is to close and reopen the tab.
+* Sometimes it crashes the browser tab. The workaround is to close and reopen the tab. I'm sorry for this. I think it's a Z3-WASM issue. I've tried setting 'memory_high_watermark_mb', but I haven't debugged it. 
+* The tick labels overlap. The workaround is to resize the chart until they don't. All I have is a hacky workaround - `cullOverlappingTickLabels`. I need to go try to fix it in D3.
