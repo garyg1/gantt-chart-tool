@@ -1622,7 +1622,8 @@ async function initializeMonacoEditorAsynchronously(
                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
                     schemas: [
                         {
-                            uri: "/schema.json",
+                            // Hardcode full path - I don't understand Monaco's behavior here
+                            uri: "https://garygurlaskie.com/gantt-chart-tool/schema.json",
                             fileMatch: [modelUri.toString()],
                             schema: jsonSchema,
                         },
