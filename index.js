@@ -1961,18 +1961,14 @@ async function scheduleTasks(timeline, onSolvingStart) {
         return [solver, ti_start, ti_end];
     }
 
-    function getOrBuildSolver(cacheKey) {
-        let currAttemptTimeout = _solutionCache[cacheKey]
-            ? _solutionCache[cacheKey][2]
-            : Z3_INITIAL_TIMEOUT_MS;
-
+    function getOrBuildSolver(cacheKey, currAttemptTimeout) {
         const [solver, ti_start, ti_end] =
             cacheKey === _lastSolverCacheKey ? _lastSolverUsed : buildSolver();
         _lastSolverCacheKey = cacheKey;
         _lastSolverUsed = [solver, ti_start, ti_end];
         solver.set("timeout", currAttemptTimeout);
 
-        return [..._lastSolverUsed, currAttemptTimeout];
+        return [..._lastSolverUsed];
     }
 
     async function solve() {
@@ -1980,9 +1976,17 @@ async function scheduleTasks(timeline, onSolvingStart) {
         let starts;
         let ends;
         if (!_solutionCache[cacheKey] || _solutionCache[cacheKey][2] !== null) {
+            let oldStarts, oldEnds, currAttemptTimeout;
+            if (_solutionCache[cacheKey]) {
+                [oldStarts, oldEnds, currAttemptTimeout] = _solutionCache[cacheKey];
+            }
+            if (!currAttemptTimeout) {
+                currAttemptTimeout = Z3_INITIAL_TIMEOUT_MS;
+            }
+
             const logTime = timer();
             log("configuring solver...", logTime());
-            const [solver, ti_start, ti_end, currAttemptTimeout] = getOrBuildSolver(cacheKey);
+            const [solver, ti_start, ti_end] = getOrBuildSolver(cacheKey, currAttemptTimeout);
             log("configured solver.", logTime(), currAttemptTimeout);
 
             log("running solver...", logTime());
@@ -2009,6 +2013,12 @@ async function scheduleTasks(timeline, onSolvingStart) {
                     Z3_MAX_TIMEOUT_MS,
                 );
                 _renderNeeded = true;
+
+                // if partial solution is not more optimal than the previous one
+                if (oldEnds && Math.max(...oldEnds) < Math.max(...ends)) {
+                    starts = oldStarts;
+                    ends = oldEnds;
+                }
             }
             _solutionCache[cacheKey] = [starts, ends, nextAttemptTimeout];
         } else {
