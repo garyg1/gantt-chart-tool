@@ -25,26 +25,26 @@
         {
             "name": "X",
             "swimlaneId": "1",
-            "duration": "PT5D",
+            "duration": "P5D",
             "deps": []
         },
         {
             "name": "Y",
             "swimlaneId": "1",
-            "duration": "PT3D",
+            "duration": "P3D",
             "deps": ["X"],
             "width": 1
         },
         {
             "name": "Z",
             "swimlaneId": "2",
-            "duration": "PT5D",
+            "duration": "P5D",
             "deps": ["X"]
         },
         {
             "name": "W",
             "swimlaneId": "3",
-            "duration": "PT5D",
+            "duration": "P5D",
             "deps": ["Y", "Z"],
             "width": 1
         }

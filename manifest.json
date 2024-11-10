@@ -12,7 +12,7 @@
         "sizes": "512x512"
       }
     ],
-    "start_url": "/",
+    "start_url": "/gantt-chart-tool",
     "background_color": "#1E1E1E",
     "display": "standalone",
     "theme_color": "#1E1E1E"

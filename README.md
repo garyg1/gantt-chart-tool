@@ -117,6 +117,7 @@ Unicode is fully supported and the tool makes few assumptions about localization
 ### Licensing & Discussion
 MIT
 
+#### Dependencies
 This repo is self-contained. Dependencies are Microsoft Z3 Prover WASM (MIT), D3.js (ISC), and Monaco editor (MIT). We used the approach found in [this CodePen](https://codepen.io/jey/pen/nOEeME) to structure the SVG.
 
 #### Comparison with other free tools
@@ -126,7 +127,7 @@ There are a lot of excellent free tools to render Gantt charts via a DSL (but no
 
 A commercial tool in this area is [Microsoft Project](https://en.wikipedia.org/wiki/Microsoft_Project).
 
-The choice to create our own simple JSON DSL (rather than extend e.g., Vega) was deliberate. This tool has a single purpose. Minimizing dependencies gives us complete control. There is opportunity to make the experience simpler and clearer when we don't try to fit into a larger framework or abstraction layer, which is what this tool tries to achieve.
+The choice to create our own simple JSON DSL to model the timeline rather than build on top of an existing graphics definition language (e.g., Vega, PlantUML) was deliberate -- since this tool doesn't try to fit into a larger framework or abstraction layer, the timeline JSONs are simple, easily parsable and programmable, which is what this tool tries to achieve.
 
 #### Optional Google Fonts Integration
 A confirmation popup is displayed before this tool makes any external network calls (Google Fonts). The Google Fonts feature is entirely optional - you can use system fonts offline.

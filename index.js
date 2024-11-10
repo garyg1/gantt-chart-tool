@@ -58,6 +58,7 @@ const DEFAULT_TASKDATES_FONTSIZE = 10;
 const DEFAULT_TITLE_FONTSIZE = 22;
 const START_DATE_ISO = dateToIso(new Date());
 const Z3_MAX_MEMORY_MB = "512";
+const Z3_TIMEOUT_GROWTH_RATE = 3;
 const Z3_MAX_TIMEOUT_MS = 180_000;
 
 let _z3 = null;
@@ -104,13 +105,14 @@ setupThreeStateButton(
     writeOptimizedScheduleToMonaco,
 );
 
-const [notifyOptimizing, notifyRendering, notifyRendered, notifyFailed, notifyTimeout] =
+const [notifyOptimizing, notifyOptimizingWithTimeout, notifyRendering, notifyRendered, notifyFailed] =
     setupStatusDisplay(statusField, [
         "Optimizing...",
+        /** @param {number} timeoutMs */
+        (timeoutMs) => `Optimizing (${timeoutMs.toLocaleString()}ms)...`,
         "Rendering...",
         "Rendered",
         "Failed",
-        `Timed out after ${_globalTimeoutMs / 1000} sec`,
     ]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
@@ -299,7 +301,7 @@ function makeSampleTimeline() {
             font: "sans-serif",
             startDate: START_DATE_ISO,
             dateLabels: true,
-            showDeps: true,
+            showDeps: false,
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 backgroundColor: "white",
@@ -430,12 +432,17 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
 
 /**
  * @param {HTMLElement} textElt
- * @param {string[]} statuses
+ * @param {(string | (...args) => string )[]} statuses
  * @returns {(() => {})[]} setStatus
  */
 function setupStatusDisplay(textElt, statuses) {
-    return statuses.map(status => () => {
-        textElt.innerText = status;
+    return statuses.map(statusOrGetStatus => (...args) => {
+        if (typeof statusOrGetStatus === 'string') {
+            textElt.innerText = statusOrGetStatus;
+        }
+        else {
+            textElt.innerText = statusOrGetStatus(...args);
+        }
     });
 }
 
@@ -1808,7 +1815,7 @@ function getCacheKey(tasks, swimlanes) {
  * @param {typeof _timeline} timeline
  * @returns {typeof _timeline}
  */
-async function scheduleTasks(timeline) {
+async function scheduleTasks(timeline, onSolvingStart) {
     if (_z3 === null) {
         const backoffs = [1000, 5000, 15000];
         for (const backoff of backoffs) {
@@ -1963,6 +1970,7 @@ async function scheduleTasks(timeline) {
             solver.set("timeout", currAttemptTimeout);
 
             log("running solver...", logTime());
+            onSolvingStart(currAttemptTimeout);
             const result = await solver.check();
 
             log(result, logTime());
@@ -1975,9 +1983,12 @@ async function scheduleTasks(timeline) {
             ends = ti_end.map(x => model.eval(x).value()).map(Number);
 
             log(starts, ends);
+
+            // If model is not optimized, trigger a retry with 3x timeout
+            // This repeats 1/3 of the work each iteration, which is good enough.
             let nextAttemptTimeout = null;
             if (result == "unknown" && currAttemptTimeout < Z3_MAX_TIMEOUT_MS) {
-                nextAttemptTimeout = Math.min(currAttemptTimeout * 3, Z3_MAX_TIMEOUT_MS);
+                nextAttemptTimeout = Math.min(currAttemptTimeout * Z3_TIMEOUT_GROWTH_RATE, Z3_MAX_TIMEOUT_MS);
                 _renderNeeded = true;
             }
             _solutionCache[cacheKey] = [starts, ends, nextAttemptTimeout];
@@ -2027,7 +2038,8 @@ async function flushTimeline() {
 
     try {
         notifyOptimizing();
-        _scheduledTimeline = await scheduleTasks(_timeline);
+        _scheduledTimeline = await scheduleTasks(_timeline,
+            (timeout) => notifyOptimizingWithTimeout(timeout));
 
         notifyRendering();
         const svg = renderTimeline(_scheduledTimeline);
