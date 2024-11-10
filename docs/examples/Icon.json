@@ -1,0 +1,52 @@
+{
+    "title": "GCT",
+    "config": {
+        "width": 450,
+        "googleFont": "Space Grotesk",
+        "startDate": "2024-11-22",
+        "dateLabels": false,
+        "showDeps": true,
+        "palette": {
+            "gradient": ["#293936", "#477d85"],
+            "backgroundColor": "#222",
+            "stripes": { "size": 6, "strength": 0.15 },
+            "outlines": { "thresholdL1": 210, "strength": 0.25 },
+            "gridColor": ""
+        },
+        "padding": { "tasks": 5, "taskHeight": 15, "swimlanes": 5, "chartY": 300, "chartX": 200 },
+        "fontSizes": { "taskNames": 16, "title": 74 }
+    },
+    "swimlanes": [
+        { "id": "1", "name": "A", "maxParallelism": 2 },
+        { "id": "2", "name": "B", "maxParallelism": 2 },
+        { "id": "3", "name": "C", "maxParallelism": 2 }
+    ],
+    "tasks": [
+        {
+            "name": "X",
+            "swimlaneId": "1",
+            "duration": "PT5D",
+            "deps": []
+        },
+        {
+            "name": "Y",
+            "swimlaneId": "1",
+            "duration": "PT3D",
+            "deps": ["X"],
+            "width": 1
+        },
+        {
+            "name": "Z",
+            "swimlaneId": "2",
+            "duration": "PT5D",
+            "deps": ["X"]
+        },
+        {
+            "name": "W",
+            "swimlaneId": "3",
+            "duration": "PT5D",
+            "deps": ["Y", "Z"],
+            "width": 1
+        }
+    ]
+}

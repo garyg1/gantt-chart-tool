@@ -1,0 +1,19 @@
+{
+    "name": "Gantt Chart Autoscheduler Tool",
+    "icons": [
+      {
+        "src": "images/gct-icon-192.png",
+        "type": "image/png",
+        "sizes": "192x192"
+      },
+      {
+        "src": "images/gct-icon-512.png",
+        "type": "image/png",
+        "sizes": "512x512"
+      }
+    ],
+    "start_url": "/",
+    "background_color": "#1E1E1E",
+    "display": "standalone",
+    "theme_color": "#1E1E1E"
+  }
