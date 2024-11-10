@@ -34,10 +34,10 @@ const fixedIntervalsButton = document.getElementById("fixedintervals-button");
 const statusField = document.getElementById("status-field");
 const localStorageCheckbox = document.getElementById("localstorage-checkbox");
 const localStorageCheckboxLabel = document.getElementById(
-    "localstorage-checkbox-label"
+    "localstorage-checkbox-label",
 );
 const localStorageCheckboxClickArea = document.getElementById(
-    "localstorage-checkbox-clickarea"
+    "localstorage-checkbox-clickarea",
 );
 
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
@@ -90,17 +90,17 @@ setupPageLeavePrompt();
 setupThreeStateButton(
     downloadButton,
     ["Download PNG", "...", "Download started!"],
-    downloadPng
+    downloadPng,
 );
 setupThreeStateButton(
     clipboardButton,
     ["Copy to Clipboard", "...", "Copied!"],
-    copyPngToClipboard
+    copyPngToClipboard,
 );
 setupThreeStateButton(
     fixedIntervalsButton,
     ["Write Optimized Schedule", "...", "Written!"],
-    writeOptimizedScheduleToMonaco
+    writeOptimizedScheduleToMonaco,
 );
 
 const [
@@ -123,7 +123,7 @@ const isLocalStorageEnabled = setupFourStateToggle(
     readFromLocalStorage()[0],
     ["Persisted", "Cleared local storage.", "Not persisted", "Persisting!"],
     [LINK_COLOR, "grey", "grey", LINK_COLOR],
-    async isOn => (isOn ? initLocalStorage() : clearLocalStorage())
+    async isOn => (isOn ? initLocalStorage() : clearLocalStorage()),
 );
 
 /**
@@ -178,7 +178,7 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
         tasks.push(
             makeRandomFloatingTask(getName(), id, [
                 tasks[tasks.length - 1].name,
-            ])
+            ]),
         );
     }
 
@@ -186,15 +186,15 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
         const numParents = randChoice([0, 1, 1, 1, 1, 2]);
         const parentIdxes = [
             ...new Set(
-                zeroArray(numParents).map(_ => randRange(0, tasks.length))
+                zeroArray(numParents).map(_ => randRange(0, tasks.length)),
             ),
         ];
         tasks.push(
             makeRandomFloatingTask(
                 getName(),
                 getSwimlane(),
-                parentIdxes.map(i => tasks[i].name)
-            )
+                parentIdxes.map(i => tasks[i].name),
+            ),
         );
     }
 
@@ -285,7 +285,7 @@ function setupFourStateToggle(
     initialValue,
     labels,
     textColors,
-    action
+    action,
 ) {
     labels = labels.slice();
     const setText = idx => {
@@ -459,14 +459,14 @@ async function downloadPng() {
     const canvas = await renderAsCanvas();
     downloadUri(
         canvas.toDataURL(),
-        `${_timeline.title}.timeline.${dateToIso(new Date())}.png`
+        `${_timeline.title}.timeline.${dateToIso(new Date())}.png`,
     );
 }
 
 // https://stackoverflow.com/a/59162806
 async function copyPngToClipboard() {
     const blob = await renderAsCanvas().then(
-        canvas => new Promise(resolve => canvas.toBlob(resolve))
+        canvas => new Promise(resolve => canvas.toBlob(resolve)),
     );
 
     try {
@@ -494,7 +494,7 @@ function addStylesheetWithUrl(url, fontName) {
 function getGFontConsent(fontName) {
     if (_hasGfontConsent === null) {
         const result = confirm(
-            `To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`
+            `To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`,
         );
         _hasGfontConsent = `${result}`;
         window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
@@ -540,7 +540,7 @@ async function loadGoogleFont() {
                             url &&
                             url.startsWith &&
                             url.startsWith("https://") &&
-                            url.endsWith(") format('woff2');")
+                            url.endsWith(") format('woff2');"),
                     )
                     .map(raw => ({
                         url: raw.split(") format('woff2');")[0],
@@ -548,11 +548,11 @@ async function loadGoogleFont() {
                     }))
                     .map(async ({ url, original }) => {
                         const blob = await fetch(url).then(r =>
-                            r.ok ? r.blob() : null
+                            r.ok ? r.blob() : null,
                         );
                         const woff2b64 = await blobToBase64(blob);
                         return { woff2b64, original };
-                    })
+                    }),
             );
 
             for (const { woff2b64, original } of replacements) {
@@ -792,15 +792,15 @@ function interpolateColor(components, t) {
     return [
         Math.max(
             0,
-            Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255)
+            Math.min(Math.round((1 - t2) * start[0] + t2 * end[0]), 255),
         ),
         Math.max(
             0,
-            Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255)
+            Math.min(Math.round((1 - t2) * start[1] + t2 * end[1]), 255),
         ),
         Math.max(
             0,
-            Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255)
+            Math.min(Math.round((1 - t2) * start[2] + t2 * end[2]), 255),
         ),
     ];
 }
@@ -845,17 +845,17 @@ function assertTimelineValid(timeline) {
     for (const task of timeline.tasks) {
         if (task.interval.start > task.interval.end) {
             throw new Error(
-                `Task '${task.id}' ('${task.name}') has start > end.`
+                `Task '${task.id}' ('${task.name}') has start > end.`,
             );
         }
 
         if (
             !timeline.swimlanes.some(
-                swimlane => swimlane.id === task.swimlaneId
+                swimlane => swimlane.id === task.swimlaneId,
             )
         ) {
             throw new Error(
-                `Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`
+                `Task '${task.id}' ('${task.name}') has invalid swimlane id ${task.swimlaneId}.`,
             );
         }
     }
@@ -873,7 +873,7 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
             const cTransform = c.attributes.transform.value; // of the form "translate(x, y)"
             const [_, x, y] = [
                 ...cTransform.matchAll(
-                    "translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)"
+                    "translate\\(\\s*([^,]+)\\s*,\\s*([^,]+)\\s*\\)",
                 ),
             ][0].map(parseFloat);
             const width = measureText(cText, labelTextSize, font);
@@ -921,7 +921,7 @@ function renderTimeline(rawTimeline) {
             .filter(t =>
                 (rawTimeline.swimlanes || [])
                     .filter(s => s.id === t.swimlaneId)
-                    .some(s => s.hidden !== true)
+                    .some(s => s.hidden !== true),
             )
             .map(t => ({
                 ...t,
@@ -939,7 +939,7 @@ function renderTimeline(rawTimeline) {
                 return a.interval.end.getTime() - b.interval.end.getTime();
             }),
         swimlanes: (rawTimeline.swimlanes || []).filter(
-            swimlane => swimlane.hidden !== true
+            swimlane => swimlane.hidden !== true,
         ),
         config: rawTimeline.config || {},
     };
@@ -961,18 +961,18 @@ function renderTimeline(rawTimeline) {
     const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(
         timeline.config.dateLabels,
-        DEFAULT_USE_DATE_LABELS
+        DEFAULT_USE_DATE_LABELS,
     );
     const [hasGradient, gradientComponents] = parseGradient(
-        timeline.config.palette?.gradient
+        timeline.config.palette?.gradient,
     );
     const maskSize = parseIntOrDefault(
         timeline.config.palette?.stripes?.size,
-        MASK_SIZE
+        MASK_SIZE,
     );
     const maskStrength = parseIntOrDefault(
         timeline.config.palette?.stripes?.strength,
-        MASK_STRENGTH
+        MASK_STRENGTH,
     );
     const useMask = !!timeline.config.palette?.stripes;
     const taskNameLabelTextSize = 12;
@@ -987,7 +987,7 @@ function renderTimeline(rawTimeline) {
     const xAxisGridColor = "#d0dce0";
     const xAxisGridTicks = parseIntOrDefault(
         timeline.config.gridTicks,
-        DEFAULT_GRID_TICKS
+        DEFAULT_GRID_TICKS,
     );
     const swimlanePadding = 5;
     const titleTextSize = timeline.title ? 16 : 0;
@@ -996,13 +996,13 @@ function renderTimeline(rawTimeline) {
     const maxSwimlaneLabelWidth = timeline.swimlanes.reduce(
         (max, curr) =>
             Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
-        0
+        0,
     );
     const chartMarginTop =
         20 + titleTextSize + titlePaddingTop + titlePaddingBottom;
     const chartMarginLeft = Math.max(
         100,
-        maxSwimlaneLabelWidth + labelPadding * 2
+        maxSwimlaneLabelWidth + labelPadding * 2,
     );
     const scaleMarginTop = 5;
     const height =
@@ -1019,7 +1019,7 @@ function renderTimeline(rawTimeline) {
         .map(task => task.interval.end)
         .reduce((max, curr) => (!max || curr > max ? curr : max));
     const dateScalePaddingDays = Math.ceil(
-        diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent
+        diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent,
     );
     const minScaleDate = addDays(minTaskDate, -dateScalePaddingDays);
     const maxScaleDate = addDays(maxTaskDate, dateScalePaddingDays);
@@ -1164,24 +1164,26 @@ function renderTimeline(rawTimeline) {
                 })
                 .attr(
                     "width",
-                    d => dateScale(d.interval.end) - dateScale(d.interval.start)
+                    d =>
+                        dateScale(d.interval.end) - dateScale(d.interval.start),
                 )
                 .attr(
                     "height",
-                    d => taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0)
+                    d =>
+                        taskHeight - (getStrokeHex(d.swimlane.color) ? 0.5 : 0),
                 )
                 .attr("fill", d =>
                     mask
                         ? getContrastingColor(
                               d.swimlane.color,
                               maskStrength,
-                              maskStrength
+                              maskStrength,
                           )
-                        : d.swimlane.color
+                        : d.swimlane.color,
                 )
                 .attr("stroke", d => getStrokeHex(d.swimlane.color))
                 .attr("stroke-width", d =>
-                    getStrokeHex(d.swimlane.color) ? 1 : 0
+                    getStrokeHex(d.swimlane.color) ? 1 : 0,
                 );
 
             if (mask) {
@@ -1241,7 +1243,7 @@ function renderTimeline(rawTimeline) {
                 .attr("dx", d => -dateRangePadding)
                 .attr(
                     "dy",
-                    d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels
+                    d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels,
                 )
                 .attr("font-size", taskDateLabelTextSize)
                 .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
@@ -1266,7 +1268,7 @@ function renderTimeline(rawTimeline) {
             })
             .attr(
                 "width",
-                d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0)
+                d => chartMarginLeft - 5 - (getStrokeHex(d.color) ? 1 : 0),
             )
             .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
             .attr("stroke", d => getStrokeHex(d.color))
@@ -1274,7 +1276,7 @@ function renderTimeline(rawTimeline) {
             .attr("fill", d =>
                 mask
                     ? getContrastingColor(d.color, maskStrength, maskStrength)
-                    : d.color
+                    : d.color,
             );
 
         if (mask) {
@@ -1313,7 +1315,7 @@ function renderTimeline(rawTimeline) {
             d =>
                 ((taskHeight + taskPadding) * d.numTasks) / 2 -
                 taskPadding / 2 +
-                taskNameLabelTextSize / 2
+                taskNameLabelTextSize / 2,
         )
         .attr("font-size", taskNameLabelTextSize)
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
@@ -1365,7 +1367,7 @@ function renderTimeline(rawTimeline) {
 async function initializeMonacoEditorAsynchronously(
     initialJson,
     isDark,
-    onAfterRender
+    onAfterRender,
 ) {
     _timeline = JSON.parse(initialJson);
 
@@ -1378,18 +1380,18 @@ async function initializeMonacoEditorAsynchronously(
         require.config({ paths: { vs: "monaco-editor/min/vs" } });
         require(["vs/editor/editor.main"], async () => {
             const modelUri = monaco.Uri.parse(
-                "https://garygurlaskie.com/gantt-chart-tool/internal.json"
+                "https://garygurlaskie.com/gantt-chart-tool/internal.json",
             );
             const model = monaco.editor.createModel(
                 initialJson,
                 "json",
-                modelUri
+                modelUri,
             );
 
             log("Loading JSON schema...");
             try {
                 const jsonSchema = await fetch("schema.json").then(r =>
-                    r.json()
+                    r.json(),
                 );
                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
                     validate: true,
@@ -1573,19 +1575,19 @@ async function scheduleTasks(timeline) {
             timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
 
         const ti_start = tasks.map((task, i) =>
-            c.Int.const(makeVar(task, i, "start"))
+            c.Int.const(makeVar(task, i, "start")),
         );
         const ti_end = tasks.map((task, i) =>
-            c.Int.const(makeVar(task, i, "end"))
+            c.Int.const(makeVar(task, i, "end")),
         );
         const til_present = timeline.swimlanes.map(s =>
-            zeroArray(s.maxParallelism || 1).map(_ => ({}))
+            zeroArray(s.maxParallelism || 1).map(_ => ({})),
         );
         const til_start = timeline.swimlanes.map(s =>
-            zeroArray(s.maxParallelism || 1).map(_ => ({}))
+            zeroArray(s.maxParallelism || 1).map(_ => ({})),
         );
         const til_end = timeline.swimlanes.map(s =>
-            zeroArray(s.maxParallelism || 1).map(_ => ({}))
+            zeroArray(s.maxParallelism || 1).map(_ => ({})),
         );
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
@@ -1593,8 +1595,8 @@ async function scheduleTasks(timeline) {
                 solver.add(
                     c.And(
                         c.Eq(ti_start[i], task.fixedStartDateDays),
-                        c.Eq(ti_end[i], task.fixedEndDateDays)
-                    )
+                        c.Eq(ti_end[i], task.fixedEndDateDays),
+                    ),
                 );
             } else {
                 solver.add(c.Eq(ti_start[i].add(task.durationDays), ti_end[i]));
@@ -1613,13 +1615,13 @@ async function scheduleTasks(timeline) {
             const presence = [];
             for (let l = 0; l < (swimlane.maxParallelism || 1); l++) {
                 til_present[s][l][i] = c.Int.const(
-                    makeVar(task, i, l, "present")
+                    makeVar(task, i, l, "present"),
                 );
                 solver.add(
                     c.And(
                         c.GE(til_present[s][l][i], 0),
-                        c.LE(til_present[s][l][i], 1)
-                    )
+                        c.LE(til_present[s][l][i], 1),
+                    ),
                 );
                 til_start[s][l][i] = c.Int.const(makeVar(task, i, l, "start"));
                 til_end[s][l][i] = c.Int.const(makeVar(task, i, l, "end"));
@@ -1627,14 +1629,14 @@ async function scheduleTasks(timeline) {
                 solver.add(
                     c.Implies(
                         c.Eq(til_present[s][l][i], 1),
-                        c.Eq(til_start[s][l][i], ti_start[i])
-                    )
+                        c.Eq(til_start[s][l][i], ti_start[i]),
+                    ),
                 );
                 solver.add(
                     c.Implies(
                         c.Eq(til_present[s][l][i], 1),
-                        c.Eq(til_end[s][l][i], ti_end[i])
-                    )
+                        c.Eq(til_end[s][l][i], ti_end[i]),
+                    ),
                 );
 
                 presence.push(til_present[s][l][i]);
@@ -1660,7 +1662,7 @@ async function scheduleTasks(timeline) {
                             c.Implies(
                                 c.And(
                                     c.Eq(t_present[t1.globalIndex], 1),
-                                    c.Eq(t_present[t2.globalIndex], 1)
+                                    c.Eq(t_present[t2.globalIndex], 1),
                                 ),
                                 noOverlap(
                                     [
@@ -1670,9 +1672,9 @@ async function scheduleTasks(timeline) {
                                     [
                                         t_start[t2.globalIndex],
                                         t_end[t2.globalIndex],
-                                    ]
-                                )
-                            )
+                                    ],
+                                ),
+                            ),
                         );
                     }
                 }
@@ -1819,7 +1821,7 @@ async function main() {
         }
     });
     initializeMonacoEditorAsynchronously(jsonToUse, isDark, renderedJson =>
-        writeToLocalStorage(renderedJson)
+        writeToLocalStorage(renderedJson),
     ).then(({ overwriteText, setTheme }) => {
         _overwriteText = overwriteText;
         _setTheme = setTheme;
