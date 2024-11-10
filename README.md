@@ -29,12 +29,12 @@ We declare 5 tasks.
         {
             "name": "Task 1",
             "swimlaneId": "1",
-            "duration": "PT10D"
+            "duration": "P10D"
         },
         {
             "name": "Task 2",
             "swimlaneId": "2",
-            "duration": "PT20D",
+            "duration": "P20D",
             "deps": ["Task 1"]
         },
         {
@@ -48,13 +48,13 @@ We declare 5 tasks.
         {
             "name": "Task 3",
             "swimlaneId": "3",
-            "duration": "PT10D",
+            "duration": "P10D",
             "deps": ["Task 2", "Fixed Task A"]
         },
         {
             "name": "Task 4",
             "swimlaneId": "3",
-            "duration": "PT10D",
+            "duration": "P10D",
             "deps": ["Fixed Task A"]
         }
     ]
