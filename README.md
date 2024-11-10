@@ -23,7 +23,7 @@ The choice to create our own simple JSON DSL (rather than extend e.g., Vega) was
 ### Usage
 A rendered timeline scheduled by the tool. The sample project contains a graph of interdependent tasks. Some tasks are given fixed dates using `interval`. Dependencies can cross workgroup/swimlane boundaries.
 
-![An example timeline, showing a sample project with interdependent tasks](docs/images/Project%20A.timeline.2024-08-17.png)
+![An example timeline, showing a sample project with interdependent tasks](docs/images/Project%20A.timeline.2024-11-11.png)
 
 A confirm popup is displayed before this tool makes any external network calls (Google Fonts). The Google Fonts feature is entirely optional - you can use system fonts offline.
 
