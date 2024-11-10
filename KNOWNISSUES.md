@@ -1,2 +1,3 @@
-* Sometimes it crashes the browser tab. The workaround is to close and reopen the tab. I'm sorry for this. I think it's a Z3-WASM issue. I've tried setting 'memory_high_watermark_mb', but I haven't debugged it. 
+* Sometimes it crashes the browser tab. The workaround is to close and reopen the tab. I'm sorry for this. I think it's a Z3-WASM issue. I've tried setting 'memory_high_watermark_mb' to 500MiB-1GiB, which seems to fix it (WASM is restricted to 4GiB), but I haven't debugged it. 
 * The tick labels overlap. The workaround is to resize the chart until they don't. All I have is a hacky workaround - `cullOverlappingTickLabels`. I need to go try to fix it in D3.
+* I do not know what all the [Z3 parameters](https://microsoft.github.io/z3guide/programming/Parameters/#global-parameters) do. If there is a more optimal configuration that optimizes faster or more accurately, that would improve the usefulness of this tool.
