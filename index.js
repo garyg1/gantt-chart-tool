@@ -304,7 +304,6 @@ function makeSampleTimeline() {
                     size: 6,
                     strength: 0.15,
                 },
-                gridColor: DEFAULT_GRID_COLOR,
                 outlines: {
                     thresholdL1: STROKE_THRESHOLD,
                     strength: STROKE_DARKNESS,
