@@ -181,6 +181,11 @@
                         "description": "A list of task names that must be executed before this task.",
                         "items": { "type": "string" }
                     },
+                    "color": {
+                        "type": "string",
+                        "format": "color",
+                        "description": "Override the display color of this task."
+                    },
                     "width": {
                         "type": "number",
                         "description": "The amount of 'bandwidth' this task takes up. For example, if `swimlane.maxParallelism = 3`, and `task.width = 3`, then this task will block the entire swimlane until it finishes executing.",
