@@ -1,5 +1,5 @@
 # Gantt Chart Auto-scheduling Tool
-A simple, free (MIT), offline tool to auto-schedule timelines and render Gantt charts.
+A simple, free (MIT), offline tool to auto-schedule timelines and render Gantt charts completely in the browser.
 
 ### Features
 * Define timelines in a JSON DSL ([schema](https://github.com/garyg1/gantt-chart-tool/blob/main/schema.json)).
