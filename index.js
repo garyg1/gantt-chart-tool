@@ -30,6 +30,9 @@ const container = document.getElementById("container");
 const monacoContainer = document.getElementById("monaco-container");
 const downloadButton = document.getElementById("download-button");
 const clipboardButton = document.getElementById("clipboard-button");
+const tabsButton = document.getElementById("tabs-button");
+const viewTab = document.getElementById("view-tab");
+const editorTab = document.getElementById("editor-tab");
 const fixedIntervalsButton = document.getElementById("fixedintervals-button");
 const statusField = document.getElementById("status-field");
 const localStorageCheckbox = document.getElementById("localstorage-checkbox");
@@ -61,6 +64,9 @@ const Z3_MAX_MEMORY_MB = "512";
 const Z3_TIMEOUT_GROWTH_RATE = 3;
 const Z3_INITIAL_TIMEOUT_MS = 2000;
 const Z3_MAX_TIMEOUT_MS = 180_000;
+// <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
+const RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS = 0.75;
+
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
@@ -107,6 +113,8 @@ setupThreeStateButton(
     writeOptimizedScheduleToMonaco,
 );
 
+setupTabs(tabsButton, [["Editor", editorTab], ["Rendered Chart", viewTab]], LINK_COLOR);
+
 const [
     notifyOptimizing,
     notifyOptimizingWithTimeout,
@@ -134,6 +142,7 @@ const isLocalStorageEnabled = setupFourStateToggle(
 function stringifyJson(object) {
     return prettifyJson(object, 4, 75);
 }
+
 /**
  * https://github.com/garyg1/json-formatter/blob/main/formatter.js
  * @param {any} object
@@ -377,6 +386,9 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
         );
     }
 
+    tasks[0].completed = true;
+    tasks[0].importance = 2;
+
     return tasks;
 }
 
@@ -488,7 +500,6 @@ function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textC
 }
 
 /**
- *
  * @param {HTMLElement} button
  * @param {[string, string, string]} labels
  * @param {() => Promise} action
@@ -505,8 +516,8 @@ function setupThreeStateButton(button, labels, action) {
             button.style.color = originalColor;
             button.style.cursor = originalCursor;
         } else {
-            button.style.textDecoration = "none";
             button.style.color = "grey";
+            button.style.textDecoration = "none";
             button.style.cursor = "default";
         }
     };
@@ -519,6 +530,52 @@ function setupThreeStateButton(button, labels, action) {
         setTimeout(() => setText(0), 1000);
     };
     setText(0);
+}
+
+/**
+ * @param {HTMLElement} root 
+ * @param {[string, HTMLElement][]} tabs
+ * @param {string} activeColor
+ * @param {(tabIdx: number) => Promise} action 
+ */
+function setupTabs(root, tabs, activeColor) {
+    clearChildren(root);
+    let tabIdx = 0;
+    const labels = tabs.map(t => t[0]);
+    const tabElts = tabs.map(t => t[1]);
+    const labelSpans = [];
+    const refresh = () => {
+        for (let i = 0; i < labelSpans.length; i++) {
+            const labelSpan = labelSpans[i];
+            if (i === tabIdx) {
+                labelSpan.style.color = "grey";
+                labelSpan.style.cursor = "default";
+                tabElts[i].classList.add('x-tab-active');
+            } else {
+                labelSpan.style.color = activeColor;
+                labelSpan.style.cursor = "pointer";
+                tabElts[i].classList.remove('x-tab-active');
+            }
+        }
+    };
+
+    for (let i = 0; i < labels.length; i++) {
+        const labelSpan = root.appendChild(document.createElement('span'));
+        if (i !== labels.length - 1) {
+            const brk = root.appendChild(document.createElement('span'));
+            brk.innerText = ' / ';
+            brk.style.color = 'grey';
+        }
+        labelSpan.innerText = labels[i];
+        labelSpan.onclick = async (e) => {
+            e.preventDefault();
+            tabIdx = i;
+            refresh();
+        }
+        labelSpans.push(labelSpan);
+    }
+
+    refresh(0);
 }
 
 /** @param {number} ms */
@@ -622,6 +679,13 @@ async function renderAsCanvas() {
     });
 }
 
+/** @param {HTMLElement} elt */
+function clearChildren(elt) {
+    while (elt.firstChild) {
+        elt.removeChild(elt.lastChild);
+    }
+}
+
 // https://stackoverflow.com/a/15832662
 function downloadUri(uri, name) {
     const link = document.createElement("a");
@@ -634,17 +698,21 @@ function downloadUri(uri, name) {
 }
 
 async function downloadPng() {
-    const canvas = await renderAsCanvas();
-    downloadUri(canvas.toDataURL(), `${_timeline.title}.timeline.${dateToIso(new Date())}.png`);
+    try {
+        const canvas = await renderAsCanvas();
+        downloadUri(canvas.toDataURL(), `${_timeline.title}.timeline.${dateToIso(new Date())}.png`);
+    } catch (err) {
+        console.error("Failed to download PNG", err);
+    }
 }
 
 // https://stackoverflow.com/a/59162806
 async function copyPngToClipboard() {
-    const blob = await renderAsCanvas().then(
-        canvas => new Promise(resolve => canvas.toBlob(resolve)),
-    );
-
     try {
+        const blob = await renderAsCanvas().then(
+            canvas => new Promise(resolve => canvas.toBlob(resolve)),
+        );
+
         log("writing to clipboard...", blob);
         navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
     } catch (error) {
@@ -669,7 +737,7 @@ function addStylesheetWithUrl(url, fontName) {
 function getGFontConsent(fontName) {
     if (_hasGfontConsent === null) {
         const result = confirm(
-            `To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"). Continue?`,
+            `To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"), your IP address, and other metadata your browser may decide to send. Continue?`,
         );
         _hasGfontConsent = `${result}`;
         window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
@@ -1054,28 +1122,31 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
             return [x, width / 2];
         };
 
-        const toRemove = [];
-        for (let i = 0; i < xAxisTicks.length - 1; i++) {
-            const curr = xAxisTicks[i];
-            let adjacent = xAxisTicks[i + 1];
-
+        const overlaps = (curr, adjacent) => {
             const [cx, cr] = getXAndRadius(curr);
             let [nx, nr] = getXAndRadius(adjacent);
+            return cx + cr + minAxisPadding > nx - nr;
+        }
 
-            // walk forward until we find a tick that doesn't overlap
-            while (cx + cr + minAxisPadding > nx - nr) {
-                if (cr < nr) {
-                    // of the ticks, keep the larger
-                    toRemove.push(curr);
+        const toRemove = [];
+        let n = 1;
+        for (n = 1; n < 5; n++) {
+            let worked = true;
+            for (let i = 0; i < xAxisTicks.length - n; i += n) {
+                const curr = xAxisTicks[i];
+                let adjacent = xAxisTicks[i + n];
+                if (overlaps(curr, adjacent)) {
+                    worked = false;
                     break;
                 }
-                toRemove.push(adjacent);
-                i++;
-                if (i >= xAxisTicks.length - 1) {
-                    break;
-                }
-                adjacent = xAxisTicks[i + 1];
-                [nx, nr] = getXAndRadius(adjacent);
+            }
+            if (worked) {
+                break;
+            }
+        }
+        for (let i = 0; i < xAxisTicks.length; i++) {
+            if (i % n !== 0) {
+                toRemove.push(xAxisTicks[i]);
             }
         }
 
@@ -1160,6 +1231,7 @@ function renderTimeline(rawTimeline) {
     const textPadding = 6;
     const labelPadding = 12;
     const dateRangePadding = 6;
+    const completedTaskPadding = 12;
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
@@ -1171,7 +1243,9 @@ function renderTimeline(rawTimeline) {
         timeline.config.padding?.chartY,
         DEFAULT_PADDING_CHARTY,
     );
+    const cullTicks = parseBoolOrDefault(timeline.config.padding?.cullOverlappingTicks, true);
     const swimlaneLabelPadding = 5;
+    const completedTaskColor = parseStringOrDefault(timeline.config.pallete?.completedTaskColor, null);
     const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
     const defaultGridColor = getContrastingColor(backgroundColor, 0.1, 0.1);
     const xAxisGridColor = parseStringOrDefault(
@@ -1202,10 +1276,10 @@ function renderTimeline(rawTimeline) {
     const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
         .map(task => task.interval.start)
-        .reduce((min, curr) => (!min || curr < min ? curr : min));
+        .reduce((min, curr) => (!min || curr < min ? curr : min), new Date());
     const maxTaskDate = timeline.tasks
         .map(task => task.interval.end)
-        .reduce((max, curr) => (!max || curr > max ? curr : max));
+        .reduce((max, curr) => (!max || curr > max ? curr : max), new Date());
     const dateScalePaddingDays = Math.ceil(
         diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent,
     );
@@ -1356,33 +1430,43 @@ function renderTimeline(rawTimeline) {
         .attr("color", titleTextColor)
         .selectAll(".tick");
 
-    cullOverlappingTickLabels([...xAxisTicks], font);
+    if (cullTicks) {
+        cullOverlappingTickLabels([...xAxisTicks], font);
+    }
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
+        const getTaskY = d => (
+            chartMarginTop +
+            scaleMarginTop +
+            (taskHeight + taskPadding) * d.taskIndexOverall +
+            swimlanePadding * d.swimlaneIndex +
+            swimlanePadding / 2 +
+            (strokeHex ? 0.5 : 0)
+        );
+
+        const getTaskFill = d => {
+            let fillColor = d.color ?? d.swimlane.color;
+            if (d.completed) {
+                fillColor = completedTaskColor ?? getContrastingColor(fillColor, 0.4, 0.4);
+            }
+            return fillColor;
+        };
+
         const strokeHex = getStrokeHex(
             swimlane.color,
             backgroundColor,
             strokeDarkness,
             strokeThresholdL1,
         );
-        const appendTaskRect = (enter, mask) => {
+        const appendTaskRect = (enter, { mask }) => {
             let x = enter
                 .append("rect")
                 .attr("x", d => dateScale(d.interval.start))
-                .attr(
-                    "y",
-                    d =>
-                        chartMarginTop +
-                        scaleMarginTop +
-                        (taskHeight + taskPadding) * d.taskIndexOverall +
-                        swimlanePadding * d.swimlaneIndex +
-                        swimlanePadding / 2 +
-                        (strokeHex ? 0.5 : 0),
-                )
+                .attr("y", getTaskY)
                 .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
                 .attr("height", d => taskHeight - (strokeHex ? 0.5 : 0))
                 .attr("fill", d => {
-                    const fillColor = d.color ?? d.swimlane.color;
+                    const fillColor = getTaskFill(d);
                     if (mask) {
                         return getContrastingColor(fillColor, maskStrength, maskStrength);
                     }
@@ -1398,13 +1482,17 @@ function renderTimeline(rawTimeline) {
 
         const rectEnter = svg.selectAll("taskbars").data(tasks).enter();
 
-        appendTaskRect(rectEnter, false);
+        appendTaskRect(rectEnter, { mask: false });
         if (useMask) {
-            appendTaskRect(rectEnter, true);
+            appendTaskRect(rectEnter, { mask: true });
         }
 
-        // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
-        const rectTextAlignmentOffsetHackPixels = 0.75;
+        const basicTextAttributes = (enter) => {
+            enter
+                .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
+                .attr("font-family", font)
+        };
+
         // TODO: split into multiple lines on overflow
         const taskTextLabels = svg
             .selectAll("tasktextlabels")
@@ -1422,13 +1510,13 @@ function renderTimeline(rawTimeline) {
                     swimlanePadding / 2,
             )
             .attr("dx", textPadding)
-            .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
+            .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS)
             .attr("font-size", taskNameLabelTextSize)
-            .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
             .attr("text-anchor", "start")
-            .attr("font-family", font)
             .attr("fill", taskLabelTextColor)
             .text(d => d.name);
+
+        basicTextAttributes(taskTextLabels);
 
         if (dateLabels) {
             // TODO: fix overflow into left margin
@@ -1448,14 +1536,29 @@ function renderTimeline(rawTimeline) {
                     );
                 })
                 .attr("dx", d => -dateRangePadding)
-                .attr("dy", d => taskHeight / 2 + rectTextAlignmentOffsetHackPixels)
-                .attr("font-size", taskDateLabelTextSize)
-                .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
-                .attr("font-family", font)
-                .attr("text-anchor", "end")
+                .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS)
                 .attr("fill", taskDateLabelTextColor)
+                .attr("font-size", taskDateLabelTextSize)
+                .attr("text-anchor", "end")
                 .text(d => getDateRangeText(d.interval.start, d.interval.end));
+
+            basicTextAttributes(taskDateLabels);
         }
+
+        const taskCompletionLabels = svg
+            .selectAll("taskcompletionlabels")
+            .data(tasks)
+            .enter()
+            .append("text")
+            .attr("font-size", taskDateLabelTextSize)
+            .attr("x", d => dateScale(d.interval.start))
+            .attr("y", getTaskY)
+            .attr("dx", d => dateScale(d.interval.end) - dateScale(d.interval.start) - completedTaskPadding)
+            .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS + 0.5)
+            .attr("opacity", d => d.completed ? 1.0 : 0.0)
+            .attr("fill", d => getContrastingColor(getTaskFill(d), 1.0, 1.0))
+            .text("✓");
+        basicTextAttributes(taskCompletionLabels);
     }
 
     const swimlaneOffset = swimlanePadding - swimlaneLabelPadding;
@@ -1610,6 +1713,8 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
             }
             const editor = monaco.editor.create(monacoContainer, {
                 model: model,
+                // https://stackoverflow.com/questions/47017753
+                automaticLayout: true,
                 theme: getTheme(isDark),
                 minimap: { enabled: false },
             });
@@ -1804,6 +1909,7 @@ function getCacheKey(tasks, swimlanes) {
             durationDays: task.durationDays,
             swimlaneId: task.swimlaneId,
             width: task.width,
+            importance: task.importance,
         };
     });
 
@@ -1927,7 +2033,8 @@ async function scheduleTasks(timeline, onSolvingStart) {
             solver.add(c.Eq(c.Sum(...presence), task.width || 1));
         }
 
-        solver.add(c.Eq(c.Sum(...ti_end), sumDays));
+        const ti_end_wbias = ti_end.map((t, i) => t.mul(tasks[i].importance || 1));
+        solver.add(c.Eq(c.Sum(...ti_end_wbias), sumDays));
 
         for (let s = 0; s < til_present.length; s++) {
             const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
@@ -2073,9 +2180,7 @@ async function flushTimeline() {
 
         notifyRendering();
         const svg = renderTimeline(_scheduledTimeline);
-        while (container.firstChild) {
-            container.removeChild(container.lastChild);
-        }
+        clearChildren(container);
         container.append(svg);
         notifyRendered();
     } catch (e) {

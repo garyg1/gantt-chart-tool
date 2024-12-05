@@ -1,11 +1,19 @@
 # Gantt Chart Auto-scheduling Tool
-A simple, free (MIT), offline tool to auto-schedule timelines and render Gantt charts completely in the browser.
+A simple, free (MIT), offline tool to autoschedule timelines completely in the browser. Optimization uses WebAssembly.
 
 ### Features
 * Define timelines in a JSON DSL ([schema](https://github.com/garyg1/gantt-chart-tool/blob/main/schema.json)).
 * Automatically schedule timelines based on task estimates and dependencies. The optimization runs locally in the browser via Microsoft Z3 Theorem Prover.
 * Optional Google Fonts integration - use Google Fonts by specifying `googleFont`. Confirmation popup before making any external network calls. This feature is entirely optional.
 
+### Supported Browsers
+* Chrome latest
+* Firefox latest (best effort)
+
+### Licensing
+MIT
+
+# User Documentation
 ### Task Scheduling Definition
 * Tasks are grouped into "swimlanes", which have fixed work bandwidth.
 * Tasks can either have a `duration` or an `interval` (a fixed time they are executed).
@@ -88,7 +96,7 @@ No amount of additional resources will accelerate the May 30 completion. In fact
 
 ![Scheduled Timeline](docs/images/Larger%20Optimal%20Schedule%20Example%202.png)
 
-### Usage Examples
+### Usage and Styling Examples
 The below examples are timelines scheduled and rendered by the tool. The sample project contains a graph of interdependent tasks. Some tasks are given fixed dates using `interval`. Dependencies can cross workgroup/swimlane boundaries.
 
 ![An example timeline, showing a sample project with interdependent tasks](docs/images/Project%20A.timeline.2024-11-11.Basic.png)
@@ -114,13 +122,12 @@ Unicode is fully supported and the tool makes few assumptions about localization
 
 [docs/examples/Noto-Sans-Example.json](docs/examples/Noto-Sans-Example.json) (Font: Noto Sans Japanese)
 
-### Licensing & Discussion
-MIT
+# Design Discussion
 
-#### Dependencies
+### Dependencies
 This repo is self-contained. Dependencies are Microsoft Z3 Prover WASM (MIT), D3.js (ISC), and Monaco editor (MIT). We used the approach found in [this CodePen](https://codepen.io/jey/pen/nOEeME) to structure the SVG.
 
-#### Comparison with other free tools
+### Comparison with other free tools
 There are a lot of excellent free tools to render Gantt charts via a DSL (but not necessarily to schedule them).
 - [Vega implementation](https://github.com/PBI-David/Deneb-Showcase) (David Bacci)
 - [PlantUML](https://plantuml.com/gantt-diagram)
@@ -129,7 +136,7 @@ A commercial tool in this area is [Microsoft Project](https://en.wikipedia.org/w
 
 The choice to create our own simple JSON DSL to model the timeline rather than build on top of an existing graphics definition language (e.g., Vega, PlantUML) was deliberate -- since this tool doesn't try to fit into a larger framework or abstraction layer, the timeline JSONs are simple, easily parsable and programmable, which is what this tool tries to achieve.
 
-#### Optional Google Fonts Integration
+### Optional Google Fonts Integration
 A confirmation popup is displayed before this tool makes any external network calls (Google Fonts). The Google Fonts feature is entirely optional - you can use system fonts offline.
 
 ![Google Fonts popup displayed](docs/images/Google%20Fonts%20consent%20popup.png)

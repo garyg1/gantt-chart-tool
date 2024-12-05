@@ -13,13 +13,13 @@ flags = re.MULTILINE | re.DOTALL
 before_block, block = re.split(BEGIN_TAG, html, flags=flags)
 block, after_block = re.split(END_TAG, block, flags=flags)
 
-old_version = block.split("Gantt Chart Maker v")[1].split("</small><br />")[0]
+old_version = block.split("Gantt Chart Tool v")[1].split("</small><br />")[0]
 old_yyyymmdd, old_increment = old_version.split(".")
 new_increment = int(old_increment) + 1 if old_yyyymmdd == new_yyyymmdd else 1
 
 GENERATED = f"""{BEGIN_TAG}
             <small>&copy; {year} Gary Gurlaskie</small><br />
-            <small>Gantt Chart Maker v{new_yyyymmdd}.{new_increment}</small><br />
+            <small>Gantt Chart Tool v{new_yyyymmdd}.{new_increment}</small><br />
             {END_TAG}"""
 
 new_html = GENERATED.join([before_block, after_block])
