@@ -1194,9 +1194,11 @@ function renderTimeline(rawTimeline) {
         triggerLoadGoogleFont(googleFont);
         font = googleFont;
     }
-
     const woff2Stylesheet = googleFont ? _loadedWoff2s[googleFont] : null;
 
+    if (font === null) {
+        font = DEFAULT_FONT;
+    }
     // if not a <generic-name>, encode as CSS <family-name> by quoting.
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
     font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
@@ -1947,7 +1949,7 @@ async function scheduleTasks(timeline, onSolvingStart) {
         return timeline;
     }
 
-    const baseDate = parseDateOrDefault(timeline.config.startDate, new Date());
+    const baseDate = parseDateOrDefault(timeline.config?.startDate, new Date(dateToIso(new Date())));
     const tasks = timeline.tasks.map((t, i) => ({
         ...t,
         durationDays: t.duration
