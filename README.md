@@ -1,5 +1,5 @@
 # Gantt Chart Auto-scheduling Tool
-A simple, free (MIT), offline tool to autoschedule timelines completely in the browser. Optimization uses WebAssembly.
+A simple, free (MIT), offline tool to autoschedule timelines completely in the browser. Optimization uses Microsoft Z3 WebAssembly.
 
 ### Features
 * Define timelines in a JSON DSL ([schema](https://github.com/garyg1/gantt-chart-tool/blob/main/schema.json)).
