@@ -321,10 +321,6 @@ function makeSampleTimeline() {
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 backgroundColor: "white",
-                stripes: {
-                    size: 6,
-                    strength: 0.15,
-                },
                 outlines: {
                     thresholdL1: STROKE_THRESHOLD,
                     strength: STROKE_DARKNESS,
@@ -1245,7 +1241,7 @@ function renderTimeline(rawTimeline) {
     );
     const cullTicks = parseBoolOrDefault(timeline.config.padding?.cullOverlappingTicks, true);
     const swimlaneLabelPadding = 5;
-    const completedTaskColor = parseStringOrDefault(timeline.config.pallete?.completedTaskColor, null);
+    const completedTaskColor = parseStringOrDefault(timeline.config.palette?.completedTaskColor, null);
     const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
     const defaultGridColor = getContrastingColor(backgroundColor, 0.1, 0.1);
     const xAxisGridColor = parseStringOrDefault(
@@ -1435,36 +1431,41 @@ function renderTimeline(rawTimeline) {
     }
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {
+        const getTaskFill = d => {
+            let fillColor = d.color ?? d.swimlane.color;
+            if (d.completed) {
+                fillColor = completedTaskColor ?? getContrastingColor(fillColor, 0.4, 0.5);
+            }
+            return fillColor;
+        };
+
+        const getStrokeHexForTask = d => getStrokeHex(
+            getTaskFill(d),
+            backgroundColor,
+            strokeDarkness,
+            strokeThresholdL1,
+        );
+
         const getTaskY = d => (
             chartMarginTop +
             scaleMarginTop +
             (taskHeight + taskPadding) * d.taskIndexOverall +
             swimlanePadding * d.swimlaneIndex +
             swimlanePadding / 2 +
-            (strokeHex ? 0.5 : 0)
+            (getStrokeHexForTask(d) ? 0.5 : 0)
         );
 
-        const getTaskFill = d => {
-            let fillColor = d.color ?? d.swimlane.color;
-            if (d.completed) {
-                fillColor = completedTaskColor ?? getContrastingColor(fillColor, 0.4, 0.4);
-            }
-            return fillColor;
-        };
-
-        const strokeHex = getStrokeHex(
-            swimlane.color,
-            backgroundColor,
-            strokeDarkness,
-            strokeThresholdL1,
-        );
         const appendTaskRect = (enter, { mask }) => {
             let x = enter
                 .append("rect")
+                .datum(d => ({
+                    ...d,
+                    strokeHex: getStrokeHexForTask(d),
+                }))
                 .attr("x", d => dateScale(d.interval.start))
                 .attr("y", getTaskY)
                 .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
-                .attr("height", d => taskHeight - (strokeHex ? 0.5 : 0))
+                .attr("height", d => taskHeight - (d.strokeHex ? 0.5 : 0))
                 .attr("fill", d => {
                     const fillColor = getTaskFill(d);
                     if (mask) {
@@ -1472,8 +1473,8 @@ function renderTimeline(rawTimeline) {
                     }
                     return fillColor;
                 })
-                .attr("stroke", d => strokeHex)
-                .attr("stroke-width", d => (strokeHex ? 1 : 0));
+                .attr("stroke", d => d.strokeHex)
+                .attr("stroke-width", d => (d.strokeHex ? 1 : 0));
 
             if (mask) {
                 x.attr("mask", d => getMask(d.swimlane));
