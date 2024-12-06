@@ -89,7 +89,7 @@
                             "description": "Color of completed tasks."
                         }
                     },
-                    "required": ["gradient"]
+                    "required": []
                 },
                 "padding": {
                     "type": "object",
@@ -232,5 +232,5 @@
             }
         }
     },
-    "required": ["title", "config", "swimlanes", "tasks"]
+    "required": ["title", "swimlanes", "tasks"]
 }

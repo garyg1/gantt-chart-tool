@@ -50,6 +50,7 @@ const STROKE_DARKNESS = 0.25;
 const MASK_STRENGTH = 0.15;
 const MASK_SIZE = 6;
 const DEFAULT_GRID_TICKS = 20;
+const DEFAULT_COLOR = "#3c5ca2";
 const LINK_COLOR = "#3c5ca2";
 const DEFAULT_PADDING_TASKHEIGHT = 15;
 const DEFAULT_PADDING_TASKS = 5;
@@ -967,9 +968,8 @@ function colorToRgb(hex) {
         return undefined;
     }
 
-    return [color.substring(1, 3), color.substring(3, 5), color.substring(5, 7)].map(c =>
-        parseInt(c, 16),
-    );
+    return [color.substring(1, 3), color.substring(3, 5), color.substring(5, 7)]
+        .map(c => parseInt(c, 16));
 }
 
 /** @param {RGBColor} rgb */
@@ -982,12 +982,12 @@ function rgbToColor(rgb) {
  * @returns {[boolean, RGBColor?[]]}
  */
 function parseGradient(gradient) {
-    if (!gradient) {
-        return [false, undefined, undefined];
+    if (!gradient || gradient.length === 0) {
+        gradient = [DEFAULT_COLOR];
     }
 
     const components = gradient.map(colorToRgb);
-    return [components.length >= 1, components];
+    return [true, components];
 }
 
 /**
@@ -1460,10 +1460,10 @@ function renderTimeline(rawTimeline) {
         const appendTaskRect = (enter, { mask }) => {
             let x = enter
                 .append("rect")
-                .datum(d => ({
-                    ...d,
-                    strokeHex: getStrokeHexForTask(d),
-                }))
+                .datum(d => {
+                    d.strokeHex = getStrokeHexForTask(d);
+                    return d;
+                })
                 .attr("x", d => dateScale(d.interval.start))
                 .attr("y", getTaskY)
                 .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
