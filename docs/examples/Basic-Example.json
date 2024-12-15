@@ -10,7 +10,7 @@
         },
         "padding": { "swimlanes": 10 },
         "fontSizes": { "title": 29 },
-        "gridTicks": 5
+        "gridTicks": 10
     },
     "swimlanes": [
         { "id": "1", "name": "A", "maxParallelism": 2 },
