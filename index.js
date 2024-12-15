@@ -1227,12 +1227,14 @@ function renderTimeline(rawTimeline) {
         : 0;
 
     const textPadding = 6;
+    const dateScalePaddingX = 20;
     const labelPadding = 12;
     const dateRangePadding = 6;
     const completedTaskPadding = 12;
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
+    const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 20) * 0.01;
     const chartPaddingX = parseIntOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
@@ -1271,7 +1273,6 @@ function renderTimeline(rawTimeline) {
         timeline.swimlanes.length * swimlanePadding +
         2 * chartPaddingY;
 
-    const dateScalePaddingPercent = 0.2;
     const minTaskDate = timeline.tasks
         .map(task => task.interval.start)
         .reduce((min, curr) => (!min || curr < min ? curr : min), new Date());
@@ -1350,7 +1351,7 @@ function renderTimeline(rawTimeline) {
 
     const svg = d3
         .create("svg")
-        .attr("width", width + chartPaddingX * 2)
+        .attr("width", width + chartPaddingX * 2 + dateScalePaddingX)
         .attr("height", height)
         .attr("font-family", font)
         .style("background", backgroundColor);
@@ -1395,7 +1396,7 @@ function renderTimeline(rawTimeline) {
         const title = svg
             .append("text")
             .text(timeline.title)
-            .attr("x", width / 2 + chartPaddingX)
+            .attr("x", width / 2 + chartPaddingX + dateScalePaddingX / 2)
             .attr("y", titleTextSize + titlePaddingTop + chartPaddingY)
             .attr("font-size", titleTextSize)
             .attr("fill", titleTextColor)
@@ -1406,7 +1407,8 @@ function renderTimeline(rawTimeline) {
     const dateScale = d3
         .scaleUtc()
         .domain([minScaleDate, maxScaleDate])
-        .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX]);
+        .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX])
+        .nice();
 
     const xAxisGrid = svg
         .selectAll("line.horizontalGrid")
@@ -1423,7 +1425,7 @@ function renderTimeline(rawTimeline) {
     const xAxisTicks = svg
         .append("g")
         .attr("transform", `translate(0, ${chartMarginTop})`)
-        .call(xAxis)
+        .call(xAxis.ticks(xAxisGridTicks))
         .attr("font-family", font)
         .attr("color", titleTextColor)
         .selectAll(".tick");
