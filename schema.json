@@ -113,6 +113,12 @@
                         "chartY": {
                             "type": "integer",
                             "description": "Chart vertical (Y-Axis) padding"
+                        },
+                        "dateScale": {
+                            "type": "integer",
+                            "description": "Date scale padding as a percentage [0-100]",
+                            "minimum": 0,
+                            "maximum": 100
                         }
                     }
                 },
