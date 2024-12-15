@@ -9,7 +9,8 @@
             "stripes": { "size": 6, "strength": 0.15 }
         },
         "padding": { "swimlanes": 10 },
-        "fontSizes": { "title": 29 }
+        "fontSizes": { "title": 29 },
+        "gridTicks": 10
     },
     "swimlanes": [
         { "id": "1", "name": "A", "maxParallelism": 2 },
