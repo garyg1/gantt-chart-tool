@@ -14,7 +14,12 @@ A simple, free (MIT), offline tool to autoschedule timelines completely in the b
 MIT
 
 # User Documentation
-### Task Scheduling Definition
+### How do I learn to use this?
+* When you load the page an example is generated.
+* Every JSON option is listed in the ([JSON schema](https://github.com/garyg1/gantt-chart-tool/blob/main/schema.json)). The in-browser editor (Monaco) is aware of the schema and will enumerate and auto-complete the options for you in the browser.
+* Some examples are provided in this repo ([docs/examples](https://github.com/garyg1/gantt-chart-tool/tree/main/docs/examples)).
+
+### How do I create tasks, and what output can I expect the model to produce?
 * Tasks are grouped into "swimlanes", which have fixed work bandwidth.
 * Tasks can either have a `duration` or an `interval` (a fixed time they are executed).
 * Tasks can have `deps` -- they will only by scheduled after all their `deps` are complete.
