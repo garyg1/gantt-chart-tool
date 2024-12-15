@@ -1396,7 +1396,7 @@ function renderTimeline(rawTimeline) {
         const title = svg
             .append("text")
             .text(timeline.title)
-            .attr("x", width / 2 + chartPaddingX)
+            .attr("x", width / 2 + chartPaddingX + dateScalePaddingX / 2)
             .attr("y", titleTextSize + titlePaddingTop + chartPaddingY)
             .attr("font-size", titleTextSize)
             .attr("fill", titleTextColor)
