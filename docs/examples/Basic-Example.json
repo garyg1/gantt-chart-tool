@@ -8,7 +8,7 @@
             "gradient": ["#3c5ca2", "seagreen", "#eee"],
             "stripes": { "size": 6, "strength": 0.15 }
         },
-        "padding": { "swimlanes": 10, "dateScale": 15 },
+        "padding": { "swimlanes": 10 },
         "fontSizes": { "title": 29 },
         "gridTicks": 5
     },

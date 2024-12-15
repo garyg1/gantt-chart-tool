@@ -1234,7 +1234,7 @@ function renderTimeline(rawTimeline) {
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
-    const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 20) * 0.01;
+    const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 16) * 0.01;
     const chartPaddingX = parseIntOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
@@ -1408,7 +1408,7 @@ function renderTimeline(rawTimeline) {
         .scaleUtc()
         .domain([minScaleDate, maxScaleDate])
         .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX])
-        .nice();
+        .nice(xAxisGridTicks);
 
     const xAxisGrid = svg
         .selectAll("line.horizontalGrid")
