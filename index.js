@@ -49,7 +49,7 @@ const MIN_CONTRAST_L1 = 80;
 const STROKE_DARKNESS = 0.25;
 const MASK_STRENGTH = 0.15;
 const MASK_SIZE = 6;
-const TICKS_PER_DAY = 24 * 60 * 60 * 1000;
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_GRID_TICKS = 10;
 const DEFAULT_COLOR = "#3c5ca2";
 const LINK_COLOR = "#3c5ca2";
@@ -1307,12 +1307,12 @@ function renderTimeline(rawTimeline) {
                 const dateRangeText = getDateRangeText(curr.interval.start, curr.interval.end);
                 const dateRangeSize = measureText(dateRangeText, taskDateLabelTextSize, font);
                 const rhsOverflow = (
-                    (rightEdge + textPadding + nameSize)
+                    (rightEdge + textPadding + nameSize - chartPaddingX)
                     - scaleWidth
                 );
                 const lhsOverflow = leftEdge - dateRangeSize - dateRangePadding;
 
-                const pixelsToDays = (maxScaleDate - minScaleDate) / TICKS_PER_DAY / scaleWidth;
+                const pixelsToDays = (maxScaleDate - minScaleDate) / MILLIS_PER_DAY / scaleWidth;
                 const lhsOverflowDays = pixelsToDays * lhsOverflow;
                 const rhsOverflowDays = pixelsToDays * rhsOverflow;
                 const newMinScaleDate = addDays(minScaleDate, Math.floor(lhsOverflowDays));
@@ -1328,8 +1328,8 @@ function renderTimeline(rawTimeline) {
                 [minTaskDate, maxTaskDate]);
     }
 
-    minScaleDate = addDays(minScaleDate, -dateScalePaddingDaysLeft);
-    maxScaleDate = addDays(maxScaleDate, dateScalePaddingDaysRight);
+    minScaleDate = addDays(minScaleDate, -Math.ceil(dateScalePaddingDaysLeft));
+    maxScaleDate = addDays(maxScaleDate, Math.ceil(dateScalePaddingDaysRight));
 
     let cumulativeTaskIndex = 0;
     let tasksWithGradientIndex = 0;
@@ -1438,9 +1438,10 @@ function renderTimeline(rawTimeline) {
         dateScale = dateScale.nice(xAxisGridTicks);
     }
 
+    const xAxisTickList = dateScale.ticks(xAxisGridTicks);
     const xAxisGrid = svg
         .selectAll("line.horizontalGrid")
-        .data(dateScale.ticks(xAxisGridTicks))
+        .data(xAxisTickList)
         .enter()
         .append("line")
         .attr("x1", d => dateScale(d))
