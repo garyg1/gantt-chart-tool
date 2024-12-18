@@ -49,6 +49,7 @@ const MIN_CONTRAST_L1 = 80;
 const STROKE_DARKNESS = 0.25;
 const MASK_STRENGTH = 0.15;
 const MASK_SIZE = 6;
+const TICKS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_GRID_TICKS = 20;
 const DEFAULT_COLOR = "#3c5ca2";
 const LINK_COLOR = "#3c5ca2";
@@ -1104,9 +1105,8 @@ function assertTimelineValid(timeline) {
 // Approach discussed https://groups.google.com/g/d3-js/c/oVbg5HkAoH4?pli=1
 // Code suggested there doesn't work anymore for d3v7
 // This is an alternative implementation.
-function cullOverlappingTickLabels(xAxisTicks, font) {
+function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
     try {
-        const minAxisPadding = 7;
         const labelTextSize = 9;
         const getXAndRadius = c => {
             const cText = c.textContent;
@@ -1126,7 +1126,7 @@ function cullOverlappingTickLabels(xAxisTicks, font) {
 
         const toRemove = [];
         let n = 1;
-        for (n = 1; n < 5; n++) {
+        for (n = 1; n < 10; n++) {
             let worked = true;
             for (let i = 0; i < xAxisTicks.length - n; i += n) {
                 const curr = xAxisTicks[i];
@@ -1222,6 +1222,7 @@ function renderTimeline(rawTimeline) {
     );
     const taskNameLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.taskNames, 12);
     const taskDateLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.taskDates, 10);
+    const scaleLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.scaleLabels, 10);
     const titleTextSize = timeline.title
         ? parseIntOrDefault(timeline.config.fontSizes?.title, 20)
         : 0;
@@ -1233,8 +1234,10 @@ function renderTimeline(rawTimeline) {
     const completedTaskPadding = 12;
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
+    const scaleLabelPadding = parseIntOrDefault(timeline.config.padding?.scaleLabels, 9);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
-    const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 16) * 0.01;
+    const useNice = parseBoolOrDefault(timeline.config.padding?.niceDateScale, false);
+    const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
     const chartPaddingX = parseIntOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
@@ -1264,7 +1267,7 @@ function renderTimeline(rawTimeline) {
     );
     const chartMarginTop =
         20 + titleTextSize + titlePaddingTop + titlePaddingBottom + chartPaddingY;
-    const chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
+    let chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
     const scaleMarginTop = 5;
     const height =
         chartMarginTop +
@@ -1282,29 +1285,49 @@ function renderTimeline(rawTimeline) {
     const dateScalePaddingDays = Math.ceil(
         diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent,
     );
-    const minScaleDate = addDays(minTaskDate, -dateScalePaddingDays);
-    const maxScaleDate = addDays(maxTaskDate, dateScalePaddingDays);
+    let minScaleDate = minTaskDate;
+    let maxScaleDate = maxTaskDate;
+    const chartMarginRight = 0;
+
+    const scaleWidth = (width - chartMarginRight + chartPaddingX) - (chartMarginLeft + chartPaddingX);
 
     // fixed point iteration for self-referential calculation
-    let maxTaskLabelOverflowRight = 0;
     const numIters = 10;
     for (let iter = 0; iter < numIters; iter++) {
-        maxTaskLabelOverflowRight = timeline.tasks
+        [minScaleDate, maxScaleDate] = timeline.tasks
             .map(curr => {
-                const mainSectionSize = width - chartMarginLeft - maxTaskLabelOverflowRight;
-                const percent = (maxScaleDate - curr.interval.end) / (maxScaleDate - minScaleDate);
-                const rightEdge = percent * mainSectionSize;
+                const percentL = (curr.interval.start - minScaleDate) / (maxScaleDate - minScaleDate);
+                const percentR = (curr.interval.end - minScaleDate) / (maxScaleDate - minScaleDate);
+                const leftEdge = scaleWidth * percentL;
+                const rightEdge = scaleWidth * percentR;
 
-                return (
-                    measureText(curr.name, taskNameLabelTextSize, font) +
-                    textPadding -
-                    rightEdge +
-                    2
-                ); // fex extra pixels just to be safe
+                const nameSize = measureText(curr.name, taskNameLabelTextSize, font);
+                const dateRangeText = getDateRangeText(curr.interval.start, curr.interval.end);
+                const dateRangeSize = measureText(dateRangeText, taskDateLabelTextSize, font);
+                const rhsOverflow = (
+                    (rightEdge + textPadding + nameSize)
+                    - scaleWidth
+                );
+                const lhsOverflow = leftEdge - dateRangeSize - dateRangePadding;
+
+                const pixelsToDays = (maxScaleDate - minScaleDate) / TICKS_PER_DAY / scaleWidth;
+                const lhsOverflowDays = pixelsToDays * lhsOverflow;
+                const rhsOverflowDays = pixelsToDays * rhsOverflow;
+                const newMinScaleDate = addDays(minScaleDate, Math.floor(lhsOverflowDays));
+                const newMaxScaleDate = addDays(maxScaleDate, Math.ceil(rhsOverflowDays));
+
+                return [newMinScaleDate, newMaxScaleDate];
             })
-            .reduce((max, curr) => (curr > max ? curr : max), 0);
+            .reduce(
+                ([minl, maxr], [currl, currr]) => [
+                    (currl < minl ? currl : minl),
+                    (currr > maxr ? currr : maxr),
+                ],
+                [minTaskDate, maxTaskDate]);
     }
-    const chartMarginRight = maxTaskLabelOverflowRight;
+
+    minScaleDate = addDays(minScaleDate, -dateScalePaddingDays);
+    maxScaleDate = addDays(maxScaleDate, dateScalePaddingDays);
 
     let cumulativeTaskIndex = 0;
     let tasksWithGradientIndex = 0;
@@ -1404,11 +1427,14 @@ function renderTimeline(rawTimeline) {
             .attr("text-anchor", "middle");
     }
 
-    const dateScale = d3
+    let dateScale = d3
         .scaleUtc()
         .domain([minScaleDate, maxScaleDate])
         .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX])
-        .nice(xAxisGridTicks);
+
+    if (useNice) {
+        dateScale = dateScale.nice(xAxisGridTicks);
+    }
 
     const xAxisGrid = svg
         .selectAll("line.horizontalGrid")
@@ -1427,11 +1453,12 @@ function renderTimeline(rawTimeline) {
         .attr("transform", `translate(0, ${chartMarginTop})`)
         .call(xAxis.ticks(xAxisGridTicks))
         .attr("font-family", font)
+        .attr("font-size", scaleLabelTextSize)
         .attr("color", titleTextColor)
         .selectAll(".tick");
 
     if (cullTicks) {
-        cullOverlappingTickLabels([...xAxisTicks], font);
+        cullOverlappingTickLabels([...xAxisTicks], font, scaleLabelPadding);
     }
 
     for (const { tasks, swimlane } of perSwimlaneTasks) {

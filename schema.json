@@ -114,11 +114,20 @@
                             "type": "integer",
                             "description": "Chart vertical (Y-Axis) padding"
                         },
+                        "scaleLabels": {
+                            "type": "integer",
+                            "description": "Minumum padding between scale labels."
+                        },
                         "dateScale": {
                             "type": "integer",
                             "description": "Date scale padding as a percentage [0-100]",
                             "minimum": 0,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 5
+                        },
+                        "niceDateScale": {
+                            "type": "boolean",
+                            "description": "Whether to evenly align D3 date scale (see d3.nice())."
                         }
                     }
                 },
@@ -132,6 +141,10 @@
                         "taskDates": {
                             "type": "integer",
                             "description": "Font size (in pixels) for task dates."
+                        },
+                        "scaleLabels": {
+                            "type": "integer",
+                            "description": "Font size (in pixels) for the tick marks."
                         },
                         "title": {
                             "type": "integer",
