@@ -747,6 +747,9 @@ function getGFontConsent(fontName) {
 async function loadGoogleFont() {
     if (_fontToLoad === null || _triedFonts.has(_fontToLoad)) {
         _fontToLoad = null;
+        // rerender once more, this should fix a race condition
+        // where canvas cannot estimate text size until font is loaded
+        rerenderTimeline();
         return;
     }
     _triedFonts.add(_fontToLoad);
