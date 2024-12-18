@@ -125,6 +125,20 @@
                             "maximum": 100,
                             "default": 5
                         },
+                        "dateScaleLeft": {
+                            "type": "integer",
+                            "description": "Date scale padding as a percentage [0-100] - overrides dateScale",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 5
+                        },
+                        "dateScaleRight": {
+                            "type": "integer",
+                            "description": "Date scale padding as a percentage [0-100] - overrides dateScale",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 5
+                        },
                         "niceDateScale": {
                             "type": "boolean",
                             "description": "Whether to evenly align D3 date scale (see d3.nice())."

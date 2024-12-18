@@ -1234,10 +1234,12 @@ function renderTimeline(rawTimeline) {
     const completedTaskPadding = 12;
     const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
-    const scaleLabelPadding = parseIntOrDefault(timeline.config.padding?.scaleLabels, 9);
+    const scaleLabelPadding = parseIntOrDefault(timeline.config.padding?.scaleLabels, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
     const useNice = parseBoolOrDefault(timeline.config.padding?.niceDateScale, false);
     const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
+    const dateScalePaddingPercentLeft = parseIntOrDefault(timeline.config.padding?.dateScaleLeft, dateScalePaddingPercent * 100) * 0.01;
+    const dateScalePaddingPercentRight = parseIntOrDefault(timeline.config.padding?.dateScaleRight, dateScalePaddingPercent * 100) * 0.01;
     const chartPaddingX = parseIntOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
@@ -1282,9 +1284,9 @@ function renderTimeline(rawTimeline) {
     const maxTaskDate = timeline.tasks
         .map(task => task.interval.end)
         .reduce((max, curr) => (!max || curr > max ? curr : max), new Date());
-    const dateScalePaddingDays = Math.ceil(
-        diffDays(minTaskDate, maxTaskDate) * dateScalePaddingPercent,
-    );
+    const taskSpanDays = diffDays(minTaskDate, maxTaskDate);
+    const dateScalePaddingDaysLeft = Math.ceil(taskSpanDays * dateScalePaddingPercentLeft);
+    const dateScalePaddingDaysRight = Math.ceil(taskSpanDays * dateScalePaddingPercentRight);
     let minScaleDate = minTaskDate;
     let maxScaleDate = maxTaskDate;
     const chartMarginRight = 0;
@@ -1326,8 +1328,8 @@ function renderTimeline(rawTimeline) {
                 [minTaskDate, maxTaskDate]);
     }
 
-    minScaleDate = addDays(minScaleDate, -dateScalePaddingDays);
-    maxScaleDate = addDays(maxScaleDate, dateScalePaddingDays);
+    minScaleDate = addDays(minScaleDate, -dateScalePaddingDaysLeft);
+    maxScaleDate = addDays(maxScaleDate, dateScalePaddingDaysRight);
 
     let cumulativeTaskIndex = 0;
     let tasksWithGradientIndex = 0;
