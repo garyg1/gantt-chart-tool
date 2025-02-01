@@ -129,7 +129,8 @@ const [
     timeoutMs => `Optimizing (${timeoutMs.toLocaleString()}ms)...`,
     "Rendering...",
     "Rendered",
-    "Failed",
+    /** @param {string[]} failureMessages */
+    (...failureMessages) => `Failed\n${failureMessages.join('\n')}`,
 ]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
@@ -1803,6 +1804,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
 
 /** @param {string} duration */
 function parseDuration(duration) {
+    duration = duration.trim().toLocaleUpperCase();
     // Legacy support for invalid durations
     const matches = [...duration.matchAll("PT([0-9]+)D")];
     if (matches.length == 1) {
@@ -1810,14 +1812,14 @@ function parseDuration(duration) {
     }
 
     const fail = () => {
-        throw new Error("Invalid duration: " + duration);
+        throw new Error("Invalid ISO8601 duration: " + duration);
     };
 
     const iso8601NumberChars = "012345678890,.".split("");
     const numbersOnly = "012345678890".split("");
     const separatorsOnly = ",.".split("");
 
-    const parse = chars => {
+    const parseIsoFloat = chars => {
         const components = [[]];
         for (const char of chars) {
             if (separatorsOnly.includes(char)) {
@@ -1841,8 +1843,8 @@ function parseDuration(duration) {
         fail();
     }
     const parts = [
-        ["P", ["Y", "M", "W", "D"]],
-        ["T", ["H", "M", "S"]],
+        ["P", ["Y", "M", "W", "D"], "T"],
+        ["T", ["H", "M", "S"], null],
     ];
     const partValuesInDays = {
         PY: 365,
@@ -1855,13 +1857,20 @@ function parseDuration(duration) {
     };
     let i = 0;
     components = {};
-    for (const [partStart, subparts] of parts) {
+    for (const [partStart, subparts, nextPartStart] of parts) {
+        if (i >= duration.length) {
+            break;
+        }
         if (duration.charAt(i) !== partStart) {
             continue;
         }
+
         i++;
         let subpartIdx = 0;
-        while (subpartIdx < subparts.length) {
+        while (subpartIdx < subparts.length && i < duration.length) {
+            if (duration.charAt(i) === nextPartStart) {
+                break;
+            }
             const num = [];
             while (i < duration.length) {
                 const char = duration.charAt(i);
@@ -1871,11 +1880,16 @@ function parseDuration(duration) {
                 i++;
                 num.push(char);
             }
-            const value = parse(num);
+            const value = parseIsoFloat(num);
+            if (i >= duration.length || isNaN(value)) {
+                fail();
+            }
 
+            let foundSubpart = false;
             while (subpartIdx < subparts.length) {
                 const subpart = subparts[subpartIdx++];
                 if (duration.charAt(i) === subpart) {
+                    foundSubpart = true;
                     i++;
 
                     const key = `${partStart}${subpart}`;
@@ -1886,9 +1900,15 @@ function parseDuration(duration) {
                     break;
                 }
             }
+            if (!foundSubpart && duration.charAt(i) !== nextPartStart) {
+                fail();
+            }
         }
     }
 
+    if (i < duration.length) {
+        fail();
+    }
     return Math.ceil(
         sum(Object.entries(components).map(([part, value]) => partValuesInDays[part] * value)),
     );
@@ -2007,6 +2027,8 @@ async function scheduleTasks(timeline, onSolvingStart) {
         const lengthDays = c.Int.const("lengthDays");
         const sumDays = c.Int.const("sumDays");
 
+        const errors = [];
+
         // these are evaluated lexicographically
         // https://microsoft.github.io/z3guide/docs/optimization/combiningobjectives
         solver.minimize(lengthDays); // primary: minimize end date of timeline
@@ -2047,10 +2069,18 @@ async function scheduleTasks(timeline, onSolvingStart) {
 
             for (const d of task.deps || []) {
                 const j = getTaskIdx(d);
+                if (j === -1) {
+                    errors.push(`Can't find dependency: ${d} for ${task.name}`);
+                    continue;
+                }
                 solver.add(c.GT(ti_start[i], ti_end[j]));
             }
 
             const s = swimlaneIndex(task);
+            if (s === -1) {
+                errors.push(`Can't find swimlane ${task.swimlaneId || '<not provided>'} for task ${task.name}`);
+                continue;
+            }
             const swimlane = timeline.swimlanes[s];
             const presence = [];
             for (let l = 0; l < (swimlane.maxParallelism || 1); l++) {
@@ -2101,6 +2131,10 @@ async function scheduleTasks(timeline, onSolvingStart) {
                     }
                 }
             }
+        }
+
+        if (errors.length > 0) {
+            throw new Error(errors.join('\n'));
         }
 
         return [solver, ti_start, ti_end];
@@ -2223,7 +2257,7 @@ async function flushTimeline() {
         notifyRendered();
     } catch (e) {
         console.error("Building timeline failed", e);
-        notifyFailed(e);
+        notifyFailed(e.message);
     }
 }
 
