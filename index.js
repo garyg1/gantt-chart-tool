@@ -1731,7 +1731,7 @@ function renderTimeline(rawTimeline) {
  * @param {(json: string) => { }} onAfterRender
  */
 async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfterRender) {
-    _timeline = JSON.parse(initialJson);
+    _timeline = parseJsoncUsingLib(initialJson);
 
     function getTheme(_isDark) {
         return _isDark ? "vs-dark" : "vs";
@@ -1775,7 +1775,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
             editor.getModel().onDidChangeContent(() => {
                 const json = editor.getModel().createSnapshot().read();
                 try {
-                    _timeline = JSON.parse(json);
+                    _timeline = parseJsoncUsingLib(json);
                     rerenderTimeline();
                     onAfterRender(json);
                 } catch (e) {
@@ -1815,7 +1815,18 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
     });
 }
 
-/** @param {string} duration */
+function parseJsoncUsingLib(jsonc) {
+    if (!window.parseJsonc) {
+        console.warn("Couldn't find jsonc library?");
+        return JSON.parse(jsonc);
+    }
+    return window.parseJsonc(jsonc);
+}
+
+/**
+ * Parses an ISO8601 duration (or legacy duration).
+ * @param {string} duration
+ */
 function parseDuration(duration) {
     duration = duration.trim().toLocaleUpperCase();
     // Legacy support for invalid durations
