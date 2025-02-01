@@ -754,9 +754,11 @@ function getGFontConsent(fontName) {
 async function loadGoogleFont() {
     if (_fontToLoad === null || _triedFonts.has(_fontToLoad)) {
         _fontToLoad = null;
-        // rerender once more, this should fix a race condition
-        // where canvas cannot estimate text size until font is loaded
-        rerenderTimeline();
+        if (_triedFonts.has(_fontToLoad)) {
+            // rerender once more, this should fix a race condition
+            // where canvas cannot estimate text size until font is loaded
+            rerenderTimeline();
+        }
         return;
     }
     _triedFonts.add(_fontToLoad);
@@ -1777,7 +1779,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                     rerenderTimeline();
                     onAfterRender(json);
                 } catch (e) {
-                    console.warn("Exception while rendering timeline:", e);
+                    notifyFailed(e.message);
                 }
             });
 
