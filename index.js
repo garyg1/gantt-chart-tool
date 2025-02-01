@@ -1992,6 +1992,106 @@ function getCacheKey(tasks, swimlanes) {
     return stringifyJson([taskKeys, swimlaneKeys]);
 }
 
+/** @param {number} ord */
+function toEnUsOrd(ord) {
+    if (!ord) {
+        return ord;
+    }
+    if (ord % 10 === 1) {
+        return `${ord}st`;
+    } else if (ord % 10 === 2) {
+        return `${ord}nd`;
+    } else if (ord % 10 === 3) {
+        return `${ord}rd`;
+    }
+    return `${ord}th`;
+}
+
+/**
+ * @param {typeof _timeline} timeline
+ * @returns {typeof _timeline}
+ */
+function validateTimeline(timeline) {
+    /** @type {string[]} */
+    const errors = [];
+    const checkErrorsAndFail = () => {
+        if (errors.length > 0) {
+            throw new Error(errors.join("\n"));
+        }
+    };
+
+    let ord = 1;
+    const taskNames = {};
+    for (const task of timeline.tasks) {
+        if (!task || !task.name) {
+            errors.push(`The ${toEnUsOrd(ord)} task is missing a "name" property.`);
+        }
+        if (taskNames[task.name]) {
+            errors.push(`Multiple tasks cannot have name '${task.name}'`);
+        }
+        taskNames[task.name] = task;
+
+        ord++;
+    }
+
+    ord = 1;
+    const swimlaneIds = {};
+    for (const swimlane of timeline.swimlanes) {
+        if (!swimlane || !swimlane.id) {
+            errors.push(`The ${toEnUsOrd(ord)} swimlane is missing an "id" property.`);
+        }
+        ord++;
+        swimlaneIds[swimlane.id] = swimlane;
+    }
+
+    checkErrorsAndFail();
+
+    for (const task of timeline.tasks) {
+        if (task.deps) {
+            if (!Array.isArray(task.deps)) {
+                errors.push(`"deps" array is invalid for ${task.name}`);
+            } else {
+                const notFoundDeps = task.deps.filter(d => !taskNames[d]);
+                for (const d of notFoundDeps) {
+                    errors.push(`Can't find dependency: ${d} for ${task.name}`);
+                }
+
+                if (task.deps.some(d => d === task.name)) {
+                    errors.push(`Task ${task.name} can't depend on itself.`);
+                }
+            }
+        }
+
+        if (!task.swimlaneId || !swimlaneIds[task.swimlaneId]) {
+            errors.push(
+                `Can't find swimlane ${task.swimlaneId || "<not provided>"} for task ${task.name}`,
+            );
+        }
+    }
+
+    checkErrorsAndFail();
+
+    // very naive cycle detection (N^4) - need to consult my copy of CLRS
+    for (const task of timeline.tasks) {
+        const stack = [[task.name, []]];
+        while (stack.length > 0) {
+            const [curr, currBackEdges] = stack.pop();
+            const currTask = taskNames[curr];
+            for (const dep of currTask.deps || []) {
+                const cycleIdx = currBackEdges.indexOf(dep);
+                if (cycleIdx !== -1) {
+                    errors.push(
+                        `Cycle detected: ${currBackEdges.slice(cycleIdx).join(" -> ")} -> ${curr} -> ${dep}`,
+                    );
+                    checkErrorsAndFail();
+                }
+
+                stack.push([dep, [...currBackEdges, curr]]);
+            }
+        }
+    }
+}
+
 /**
  * @param {typeof _timeline} timeline
  * @returns {typeof _timeline}
@@ -2028,6 +2128,8 @@ async function scheduleTasks(timeline, onSolvingStart) {
         fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
         globalIndex: i,
     }));
+
+    validateTimeline(timeline);
 
     function buildSolver() {
         // Modified version the constraint formulation of Job-Shop found in
