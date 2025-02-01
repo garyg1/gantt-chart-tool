@@ -69,7 +69,6 @@ const Z3_MAX_TIMEOUT_MS = 180_000;
 // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
 const RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS = 0.75;
 
-
 let _z3 = null;
 let _debugGlobalMonacoEditor;
 let _timeline = makeSampleTimeline();
@@ -115,7 +114,14 @@ setupThreeStateButton(
     writeOptimizedScheduleToMonaco,
 );
 
-setupTabs(tabsButton, [["Editor", editorTab], ["Rendered Chart", viewTab]], LINK_COLOR);
+setupTabs(
+    tabsButton,
+    [
+        ["Editor", editorTab],
+        ["Rendered Chart", viewTab],
+    ],
+    LINK_COLOR,
+);
 
 const [
     notifyOptimizing,
@@ -130,7 +136,7 @@ const [
     "Rendering...",
     "Rendered",
     /** @param {string[]} failureMessages */
-    (...failureMessages) => `Failed\n${failureMessages.join('\n')}`,
+    (...failureMessages) => `Failed\n${failureMessages.join("\n")}`,
 ]);
 
 const isLocalStorageEnabled = setupFourStateToggle(
@@ -532,10 +538,10 @@ function setupThreeStateButton(button, labels, action) {
 }
 
 /**
- * @param {HTMLElement} root 
+ * @param {HTMLElement} root
  * @param {[string, HTMLElement][]} tabs
  * @param {string} activeColor
- * @param {(tabIdx: number) => Promise} action 
+ * @param {(tabIdx: number) => Promise} action
  */
 function setupTabs(root, tabs, activeColor) {
     clearChildren(root);
@@ -549,28 +555,28 @@ function setupTabs(root, tabs, activeColor) {
             if (i === tabIdx) {
                 labelSpan.style.color = "grey";
                 labelSpan.style.cursor = "default";
-                tabElts[i].classList.add('x-tab-active');
+                tabElts[i].classList.add("x-tab-active");
             } else {
                 labelSpan.style.color = activeColor;
                 labelSpan.style.cursor = "pointer";
-                tabElts[i].classList.remove('x-tab-active');
+                tabElts[i].classList.remove("x-tab-active");
             }
         }
     };
 
     for (let i = 0; i < labels.length; i++) {
-        const labelSpan = root.appendChild(document.createElement('span'));
+        const labelSpan = root.appendChild(document.createElement("span"));
         if (i !== labels.length - 1) {
-            const brk = root.appendChild(document.createElement('span'));
-            brk.innerText = ' / ';
-            brk.style.color = 'grey';
+            const brk = root.appendChild(document.createElement("span"));
+            brk.innerText = " / ";
+            brk.style.color = "grey";
         }
         labelSpan.innerText = labels[i];
-        labelSpan.onclick = async (e) => {
+        labelSpan.onclick = async e => {
             e.preventDefault();
             tabIdx = i;
             refresh();
-        }
+        };
         labelSpans.push(labelSpan);
     }
 
@@ -973,8 +979,9 @@ function colorToRgb(hex) {
         return undefined;
     }
 
-    return [color.substring(1, 3), color.substring(3, 5), color.substring(5, 7)]
-        .map(c => parseInt(c, 16));
+    return [color.substring(1, 3), color.substring(3, 5), color.substring(5, 7)].map(c =>
+        parseInt(c, 16),
+    );
 }
 
 /** @param {RGBColor} rgb */
@@ -1126,7 +1133,7 @@ function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
             const [cx, cr] = getXAndRadius(curr);
             let [nx, nr] = getXAndRadius(adjacent);
             return cx + cr + minAxisPadding > nx - nr;
-        }
+        };
 
         const toRemove = [];
         let n = 1;
@@ -1242,8 +1249,12 @@ function renderTimeline(rawTimeline) {
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
     const useNice = parseBoolOrDefault(timeline.config.padding?.niceDateScale, false);
     const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
-    const dateScalePaddingPercentLeft = parseIntOrDefault(timeline.config.padding?.dateScaleLeft, dateScalePaddingPercent * 100) * 0.01;
-    const dateScalePaddingPercentRight = parseIntOrDefault(timeline.config.padding?.dateScaleRight, dateScalePaddingPercent * 100) * 0.01;
+    const dateScalePaddingPercentLeft =
+        parseIntOrDefault(timeline.config.padding?.dateScaleLeft, dateScalePaddingPercent * 100) *
+        0.01;
+    const dateScalePaddingPercentRight =
+        parseIntOrDefault(timeline.config.padding?.dateScaleRight, dateScalePaddingPercent * 100) *
+        0.01;
     const chartPaddingX = parseIntOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
@@ -1254,7 +1265,10 @@ function renderTimeline(rawTimeline) {
     );
     const cullTicks = parseBoolOrDefault(timeline.config.padding?.cullOverlappingTicks, true);
     const swimlaneLabelPadding = 5;
-    const completedTaskColor = parseStringOrDefault(timeline.config.palette?.completedTaskColor, null);
+    const completedTaskColor = parseStringOrDefault(
+        timeline.config.palette?.completedTaskColor,
+        null,
+    );
     const backgroundColor = parseStringOrDefault(timeline.config.palette?.backgroundColor, "white");
     const defaultGridColor = getContrastingColor(backgroundColor, 0.1, 0.1);
     const xAxisGridColor = parseStringOrDefault(
@@ -1295,14 +1309,15 @@ function renderTimeline(rawTimeline) {
     let maxScaleDate = maxTaskDate;
     const chartMarginRight = 0;
 
-    const scaleWidth = (width - chartMarginRight + chartPaddingX) - (chartMarginLeft + chartPaddingX);
+    const scaleWidth = width - chartMarginRight + chartPaddingX - (chartMarginLeft + chartPaddingX);
 
     // fixed point iteration for self-referential calculation
     const numIters = 10;
     for (let iter = 0; iter < numIters; iter++) {
         [minScaleDate, maxScaleDate] = timeline.tasks
             .map(curr => {
-                const percentL = (curr.interval.start - minScaleDate) / (maxScaleDate - minScaleDate);
+                const percentL =
+                    (curr.interval.start - minScaleDate) / (maxScaleDate - minScaleDate);
                 const percentR = (curr.interval.end - minScaleDate) / (maxScaleDate - minScaleDate);
                 const leftEdge = scaleWidth * percentL;
                 const rightEdge = scaleWidth * percentR;
@@ -1310,10 +1325,7 @@ function renderTimeline(rawTimeline) {
                 const nameSize = measureText(curr.name, taskNameLabelTextSize, font);
                 const dateRangeText = getDateRangeText(curr.interval.start, curr.interval.end);
                 const dateRangeSize = measureText(dateRangeText, taskDateLabelTextSize, font);
-                const rhsOverflow = (
-                    (rightEdge + textPadding + nameSize - chartPaddingX)
-                    - scaleWidth
-                );
+                const rhsOverflow = rightEdge + textPadding + nameSize - chartPaddingX - scaleWidth;
                 const lhsOverflow = leftEdge - dateRangeSize - dateRangePadding;
 
                 const pixelsToDays = (maxScaleDate - minScaleDate) / MILLIS_PER_DAY / scaleWidth;
@@ -1326,10 +1338,11 @@ function renderTimeline(rawTimeline) {
             })
             .reduce(
                 ([minl, maxr], [currl, currr]) => [
-                    (currl < minl ? currl : minl),
-                    (currr > maxr ? currr : maxr),
+                    currl < minl ? currl : minl,
+                    currr > maxr ? currr : maxr,
                 ],
-                [minTaskDate, maxTaskDate]);
+                [minTaskDate, maxTaskDate],
+            );
     }
 
     minScaleDate = addDays(minScaleDate, -Math.ceil(dateScalePaddingDaysLeft));
@@ -1436,7 +1449,7 @@ function renderTimeline(rawTimeline) {
     let dateScale = d3
         .scaleUtc()
         .domain([minScaleDate, maxScaleDate])
-        .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX])
+        .range([chartMarginLeft + chartPaddingX, width - chartMarginRight + chartPaddingX]);
 
     if (useNice) {
         dateScale = dateScale.nice(xAxisGridTicks);
@@ -1477,21 +1490,16 @@ function renderTimeline(rawTimeline) {
             return fillColor;
         };
 
-        const getStrokeHexForTask = d => getStrokeHex(
-            getTaskFill(d),
-            backgroundColor,
-            strokeDarkness,
-            strokeThresholdL1,
-        );
+        const getStrokeHexForTask = d =>
+            getStrokeHex(getTaskFill(d), backgroundColor, strokeDarkness, strokeThresholdL1);
 
-        const getTaskY = d => (
+        const getTaskY = d =>
             chartMarginTop +
             scaleMarginTop +
             (taskHeight + taskPadding) * d.taskIndexOverall +
             swimlanePadding * d.swimlaneIndex +
             swimlanePadding / 2 +
-            (getStrokeHexForTask(d) ? 0.5 : 0)
-        );
+            (getStrokeHexForTask(d) ? 0.5 : 0);
 
         const appendTaskRect = (enter, { mask }) => {
             let x = enter
@@ -1526,10 +1534,10 @@ function renderTimeline(rawTimeline) {
             appendTaskRect(rectEnter, { mask: true });
         }
 
-        const basicTextAttributes = (enter) => {
+        const basicTextAttributes = enter => {
             enter
                 .attr("dominant-baseline", "middle") // https://stackoverflow.com/a/15997503
-                .attr("font-family", font)
+                .attr("font-family", font);
         };
 
         // TODO: split into multiple lines on overflow
@@ -1592,9 +1600,12 @@ function renderTimeline(rawTimeline) {
             .attr("font-size", taskDateLabelTextSize)
             .attr("x", d => dateScale(d.interval.start))
             .attr("y", getTaskY)
-            .attr("dx", d => dateScale(d.interval.end) - dateScale(d.interval.start) - completedTaskPadding)
+            .attr(
+                "dx",
+                d => dateScale(d.interval.end) - dateScale(d.interval.start) - completedTaskPadding,
+            )
             .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS + 0.5)
-            .attr("opacity", d => d.completed ? 1.0 : 0.0)
+            .attr("opacity", d => (d.completed ? 1.0 : 0.0))
             .attr("fill", d => getContrastingColor(getTaskFill(d), 1.0, 1.0))
             .text("✓");
         basicTextAttributes(taskCompletionLabels);
@@ -2004,7 +2015,10 @@ async function scheduleTasks(timeline, onSolvingStart) {
         return timeline;
     }
 
-    const baseDate = parseDateOrDefault(timeline.config?.startDate, new Date(dateToIso(new Date())));
+    const baseDate = parseDateOrDefault(
+        timeline.config?.startDate,
+        new Date(dateToIso(new Date())),
+    );
     const tasks = timeline.tasks.map((t, i) => ({
         ...t,
         durationDays: t.duration
@@ -2078,7 +2092,9 @@ async function scheduleTasks(timeline, onSolvingStart) {
 
             const s = swimlaneIndex(task);
             if (s === -1) {
-                errors.push(`Can't find swimlane ${task.swimlaneId || '<not provided>'} for task ${task.name}`);
+                errors.push(
+                    `Can't find swimlane ${task.swimlaneId || "<not provided>"} for task ${task.name}`,
+                );
                 continue;
             }
             const swimlane = timeline.swimlanes[s];
@@ -2134,7 +2150,7 @@ async function scheduleTasks(timeline, onSolvingStart) {
         }
 
         if (errors.length > 0) {
-            throw new Error(errors.join('\n'));
+            throw new Error(errors.join("\n"));
         }
 
         return [solver, ti_start, ti_end];
