@@ -18,6 +18,10 @@
                     "type": "boolean",
                     "description": "Whether to render lines between dependent tasks."
                 },
+                "showCriticalPaths": {
+                    "type": "boolean",
+                    "description": "Whether to render 'special' lines between tasks on critical paths (see Wikipedia for an explanation)."
+                },
                 "width": {
                     "type": "number",
                     "description": "Width (pixels) of the rendered chart."
