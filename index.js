@@ -80,7 +80,7 @@ let _overwriteText = null;
 let _setThemeCb = null;
 let _renderNeeded = false;
 let _scheduledTimeline = null;
-let _hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
+window._hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
 let _lastSolverCacheKey = null;
 let _lastSolverUsed = null;
 const _solutionCache = {};
@@ -666,7 +666,7 @@ const standardizeColor = (() => {
 async function renderAsCanvas() {
     return new Promise(resolve => {
         const backgroundColor = parseStringOrDefault(
-            _scheduledTimeline.config.palette?.backgroundColor,
+            _scheduledTimeline.config?.palette?.backgroundColor,
             "white",
         );
         const svg = renderTimeline(_scheduledTimeline);
@@ -750,15 +750,15 @@ function addStylesheetWithUrl(url, fontName) {
 
 /** @param {string} fontName */
 function getGFontConsent(fontName) {
-    if (_hasGfontConsent === null) {
+    if (window._hasGfontConsent === null) {
         const result = confirm(
             `To load Google Fonts, this page will trigger requests to the Google Fonts API containing the font names you type (e.g., "${fontName}"), your IP address, and other metadata your browser may decide to send. Continue?`,
         );
-        _hasGfontConsent = `${result}`;
-        window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, _hasGfontConsent);
+        window._hasGfontConsent = `${result}`;
+        window.localStorage.setItem(GFONT_LOCAL_STORAGE_KEY, window._hasGfontConsent);
     }
 
-    return _hasGfontConsent === "true";
+    return window._hasGfontConsent === "true";
 }
 
 async function loadGoogleFont() {
@@ -1815,6 +1815,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                 minimap: { enabled: false },
             });
             _debugGlobalMonacoEditor = editor;
+            window._debugGlobalMonacoEditor = editor;
 
             editor.getModel().onDidChangeContent(() => {
                 const json = editor.getModel().createSnapshot().read();
