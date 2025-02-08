@@ -54,8 +54,6 @@ async function main() {
     const driver = await new Builder().forBrowser(Browser.CHROME).build();
     await driver.get(baseUrl);
 
-    console.log(await driver.getTitle());
-
     for (const fname of fs.readdirSync(testDir)) {
         if (!fname.endsWith(".json")) {
             continue;
