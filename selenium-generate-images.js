@@ -15,7 +15,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
  */
 async function downloadOne(driver, json, outfileName) {
     await driver.executeAsyncScript(`
-    window._hasGfontConsent = "true";
+    window._hasGfontConsent = "true"; // string return value of window.confirm()
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
     const callback = arguments[arguments.length - 1];
     let attempts = 10;
