@@ -327,6 +327,7 @@ function makeSampleTimeline() {
             startDate: START_DATE_ISO,
             dateLabels: true,
             showDeps: false,
+            showCriticalPaths: false,
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 backgroundColor: "white",
@@ -890,7 +891,7 @@ function addDays(date, days) {
  * @param {Date} date2
  */
 function diffDays(date1, date2) {
-    return Math.ceil((date2 - date1) / (1000 * 60 * 60 * 24));
+    return Math.ceil((date2 - date1) / MILLIS_PER_DAY);
 }
 
 /**
@@ -1483,26 +1484,26 @@ function renderTimeline(rawTimeline) {
         cullOverlappingTickLabels([...xAxisTicks], font, scaleLabelPadding);
     }
 
+    const getTaskFill = d => {
+        let fillColor = d.color ?? d.swimlane.color;
+        if (d.completed) {
+            fillColor = completedTaskColor ?? getContrastingColor(fillColor, 0.4, 0.5);
+        }
+        return fillColor;
+    };
+
+    const getStrokeHexForTask = d =>
+        getStrokeHex(getTaskFill(d), backgroundColor, strokeDarkness, strokeThresholdL1);
+
+    const getTaskY = d =>
+        chartMarginTop +
+        scaleMarginTop +
+        (taskHeight + taskPadding) * d.taskIndexOverall +
+        swimlanePadding * d.swimlaneIndex +
+        swimlanePadding / 2 +
+        (getStrokeHexForTask(d) ? 0.5 : 0);
+
     for (const { tasks, swimlane } of perSwimlaneTasks) {
-        const getTaskFill = d => {
-            let fillColor = d.color ?? d.swimlane.color;
-            if (d.completed) {
-                fillColor = completedTaskColor ?? getContrastingColor(fillColor, 0.4, 0.5);
-            }
-            return fillColor;
-        };
-
-        const getStrokeHexForTask = d =>
-            getStrokeHex(getTaskFill(d), backgroundColor, strokeDarkness, strokeThresholdL1);
-
-        const getTaskY = d =>
-            chartMarginTop +
-            scaleMarginTop +
-            (taskHeight + taskPadding) * d.taskIndexOverall +
-            swimlanePadding * d.swimlaneIndex +
-            swimlanePadding / 2 +
-            (getStrokeHexForTask(d) ? 0.5 : 0);
-
         const appendTaskRect = (enter, { mask }) => {
             let x = enter
                 .append("rect")
@@ -1689,7 +1690,7 @@ function renderTimeline(rawTimeline) {
         .attr("font-family", font)
         .attr("fill", d => getContrastingColor(d.color, 0.8, 1.0));
 
-    if (timeline.config.showDeps) {
+    if (timeline.config.showDeps || timeline.config.showCriticalPaths) {
         const getTaskY = t =>
             chartMarginTop +
             scaleMarginTop +
@@ -1697,16 +1698,48 @@ function renderTimeline(rawTimeline) {
             swimlanePadding * t.swimlaneIndex +
             taskHeight / 2;
 
+        const { showDeps, showCriticalPaths } = timeline.config;
+        const dateScaleDuration = maxScaleDate - minScaleDate;
+        const depColor = "grey";
+        const getDepOpacityAndColor = ([d0, d1]) => {
+            const diff = d1.interval.start - d0.interval.end;
+            if (showCriticalPaths && diff <= MILLIS_PER_DAY) {
+                const gradientId = "g" + Math.random().toString().split(".")[1];
+                const gradient = svg
+                    .append("linearGradient")
+                    .attr("id", gradientId)
+                    .attr("gradientUnits", "userSpaceOnUse")
+                    .attr("x1", dateScale(d0.interval.end))
+                    .attr("y1", getTaskY(d0))
+                    .attr("x2", dateScale(d1.interval.start))
+                    .attr("y2", getTaskY(d1));
+                const startColor = getStrokeHexForTask(d0) ?? getTaskFill(d0);
+                const endColor = getStrokeHexForTask(d1) ?? getTaskFill(d1);
+                gradient.append("stop").attr("offset", "0%").attr("stop-color", startColor);
+                gradient.append("stop").attr("offset", "100%").attr("stop-color", endColor);
+                return { opacity: 0.8, color: `url(#${gradientId})`, width: 2 };
+            }
+            if (!showDeps) {
+                return { opacity: 0.0, color: depColor, width: 0 };
+            }
+            if (!showCriticalPaths) {
+                return { opacity: 1.0, color: depColor, width: 1 };
+            }
+            const closenessLinear = (d1.interval.start - d0.interval.end) / dateScaleDuration;
+            const opacity = Math.max(0.5, Math.min(0.7, 0.5 - closenessLinear));
+            return { opacity, color: depColor, width: 1 };
+        };
+
         const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
         const deps = [];
-        for (const t1 of allTasks) {
-            for (const depName of t1.deps || []) {
-                const t2 = allTasks.find(t => t.name === depName);
-                if (!t2) {
-                    log("Can't find dependency?", t1, allTasks);
+        for (const task of allTasks) {
+            for (const depName of task.deps || []) {
+                const dep = allTasks.find(t => t.name === depName);
+                if (!dep) {
+                    log("Can't find dependency?", task, allTasks);
                     continue;
                 }
-                deps.push([t1, t2]);
+                deps.push([dep, task]);
             }
         }
 
@@ -1715,9 +1748,11 @@ function renderTimeline(rawTimeline) {
             .data(deps)
             .enter()
             .append("line")
-            .attr("stroke", "grey")
-            .attr("x1", d => dateScale(d[0].interval.start))
-            .attr("x2", d => dateScale(d[1].interval.end))
+            .attr("stroke-width", d => getDepOpacityAndColor(d).width)
+            .attr("stroke", d => getDepOpacityAndColor(d).color)
+            .attr("stroke-opacity", d => getDepOpacityAndColor(d).opacity)
+            .attr("x1", d => dateScale(d[0].interval.end) - (getStrokeHexForTask(d[0]) ? 0 : 1))
+            .attr("x2", d => dateScale(d[1].interval.start) + (getStrokeHexForTask(d[1]) ? 0 : 1))
             .attr("y1", d => getTaskY(d[0]))
             .attr("y2", d => getTaskY(d[1]));
     }
