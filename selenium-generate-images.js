@@ -2,7 +2,7 @@ const { By, Builder, Browser, Key, WebDriver, until } = require("selenium-webdri
 const fs = require("fs");
 const path = require("path");
 
-
+const baseUrl = "http://localhost:8081/";
 const downloadsDir = "/Users/gary/Downloads";
 const testDir = "./docs/examples";
 const outDir = "./docs/generatedImages";
@@ -41,19 +41,18 @@ async function downloadOne(driver, json, outfileName) {
     await delay(1000);
 
     const files = fs.readdirSync(downloadsDir);
-    const extension = ".png";
     const match = files
         .filter(fname => fname.startsWith(json.title))
         .map(fname => [fname, fs.statSync(path.join(downloadsDir, fname)).ctimeMs])
         .sort((fa, fb) => fb[1] - fa[1])
-        .map(([fname, ctime]) => fname)[0];
+        .map(([fname, _ctime]) => fname)[0];
     fs.copyFileSync(path.join(downloadsDir, match), path.join(outDir, outfileName));
     fs.rmSync(path.join(downloadsDir, match));
 }
 
 async function main() {
     const driver = await new Builder().forBrowser(Browser.CHROME).build();
-    await driver.get("http://localhost:8081/");
+    await driver.get(baseUrl);
 
     console.log(await driver.getTitle());
 
@@ -63,7 +62,6 @@ async function main() {
         }
 
         console.log(`Rendering ${fname}`);
-
         const json = fs.readFileSync(path.join(testDir, fname));
         try {
             await downloadOne(driver, JSON.parse(json), `${fname.split(".json")[0]}.rendered.png`);
