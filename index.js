@@ -315,19 +315,16 @@ function prettifyJson(object, indent, lineLength) {
 /**
  * @typedef {ReturnType<makeSampleTimeline>} Timeline
  * @typedef {Timeline['swimlanes'][0]} Swimlane
- * @typedef {Timeline['config'][0]} Config
+ * @typedef {Timeline['config']} Config
  * @typedef {Timeline['tasks'][0]} Task
  */
 function makeSampleTimeline() {
-    return {
+    const timeline = {
         title: "Project A",
         config: {
-            width: 800,
+            width: 700,
             font: "sans-serif",
             startDate: START_DATE_ISO,
-            dateLabels: true,
-            showDeps: false,
-            showCriticalPaths: false,
             palette: {
                 gradient: ["#3c5ca2", "seagreen", "#eee"],
                 backgroundColor: "white",
@@ -336,6 +333,9 @@ function makeSampleTimeline() {
                     strength: STROKE_DARKNESS,
                 },
             },
+            showDeps: false,
+            showCriticalPaths: false,
+            dateLabels: true,
             padding: {
                 tasks: DEFAULT_PADDING_TASKS,
                 taskHeight: DEFAULT_PADDING_TASKHEIGHT,
@@ -363,6 +363,15 @@ function makeSampleTimeline() {
             makeRandomFixedTask("Fixed Task B", "2"),
         ],
     };
+
+    // remove from user examples, but keep types hints
+    delete timeline.config.palette.outlines;
+    delete timeline.config.padding;
+    delete timeline.config.fontSizes;
+    delete timeline.config.dateLabels;
+    delete timeline.config.startDate;
+
+    return timeline;
 }
 
 /**
