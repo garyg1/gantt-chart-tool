@@ -5,7 +5,7 @@
         "font": "Schibsted Grotesk",
         "startDate": "2024-11-10",
         "dateLabels": true,
-        "showDeps": true,
+        "showCriticalPaths": true,
         "palette": {
             "gradient": ["#eee", "#eee"],
             "backgroundColor": "white",
