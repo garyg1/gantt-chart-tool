@@ -69,7 +69,10 @@ const Z3_MAX_TIMEOUT_MS = 180_000;
 // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
 const RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS = 0.75;
 // https://stackoverflow.com/questions/11526504
+// If date/null handling code is wrong things will go very badly.
+// This will make errors easy to detect.
 const JS_MIN_DATE = new Date(-8640000000000000);
+const JS_MAX_DATE = new Date(8640000000000000);
 const COMPLETED_EMOJI = "✓";
 const VIRTUAL_SWIMLANE_ID = "_milestonevirtualswimlane";
 
@@ -1246,9 +1249,11 @@ function renderTimeline(rawTimeline) {
         });
     const minTaskDate = scheduledTasks
         .map(task => task.interval.start)
-        .reduce((min, curr) => (!min || curr < min ? curr : min), new Date());
+        .concat(rawTimeline.milestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
+        .reduce((min, curr) => (!min || curr < min ? curr : min), JS_MAX_DATE);
     let maxTaskDate = scheduledTasks
         .map(task => task.interval.end)
+        .concat(rawTimeline.milestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
         .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
     if (minTaskDate > maxTaskDate) {
         maxTaskDate = addDays(minTaskDate, 1);
@@ -1276,7 +1281,7 @@ function renderTimeline(rawTimeline) {
                 const milestoneTime = deps
                     .map(t => t.interval.end)
                     .reduce((max, end) => (end > max ? end : max), minTaskDate);
-                const completed = deps.every(d => d.completed);
+                const completed = deps.length > 0 && deps.every(d => d.completed);
                 return {
                     ...m,
                     interval: {
@@ -2221,6 +2226,7 @@ function toEnUsOrd(ord) {
  * @returns {typeof _timeline}
  */
 function validateTimeline(timeline) {
+    console.log('validating', timeline);
     /** @type {string[]} */
     const errors = [];
     const checkErrorsAndFail = () => {
@@ -2234,32 +2240,32 @@ function validateTimeline(timeline) {
 
     const propsToStringCheck = [
         {
-            name: "tasks",
+            label: "tasks",
             data: timeline.tasks || [],
             props: [{ prop: "name", unique: true, index: taskNames }],
         },
         {
-            name: "swimlanes",
+            label: "swimlanes",
             data: timeline.swimlanes || [],
             props: [{ prop: "id", index: swimlaneIds }],
         },
         {
-            name: "milestones",
+            label: "milestones",
             data: timeline.milestones || [],
             props: [{ prop: "name" }],
         },
     ];
 
-    for (const { name, data, props } of propsToStringCheck) {
+    for (const { label, data, props } of propsToStringCheck) {
         let ord = 1;
         for (const { prop, unique, index } of props) {
             for (const entry of data) {
                 if (!entry || !entry[prop]) {
-                    errors.push(`The ${toEnUsOrd(ord)} ${name} is missing a "${prop}" property.`);
+                    errors.push(`The ${toEnUsOrd(ord)} ${label} is missing a "${prop}" property.`);
                 }
                 const value = entry[prop];
                 if (unique && index && index[value]) {
-                    errors.push(`Multiple ${name}s cannot have ${prop} '${value}'`);
+                    errors.push(`Multiple ${label}s cannot have ${prop} '${value}'.`);
                 }
                 if (index) {
                     index[value] = entry;
@@ -2272,22 +2278,22 @@ function validateTimeline(timeline) {
     checkErrorsAndFail();
 
     const dependenciesToValidate = [
-        { data: timeline.tasks || [], config: { allowEmptySwimlane: false } },
-        { data: timeline.milestones || [], config: { allowEmptySwimlane: true } },
+        { label: 'task', data: timeline.tasks || [], config: { allowEmptySwimlane: false } },
+        { label: 'milestone', data: timeline.milestones || [], config: { allowEmptySwimlane: true, checkMilestoneExactlyOrDeps: true } },
     ];
-    for (const { data, config } of dependenciesToValidate) {
+    for (const { data, label, config } of dependenciesToValidate) {
         for (const taskOrMilestone of data) {
             if (taskOrMilestone.deps) {
                 if (!Array.isArray(taskOrMilestone.deps)) {
-                    errors.push(`"deps" array is invalid for ${taskOrMilestone.name}`);
+                    errors.push(`"deps" array is invalid for ${taskOrMilestone.name}.`);
                 } else {
                     const notFoundDeps = taskOrMilestone.deps.filter(d => !taskNames[d]);
                     for (const d of notFoundDeps) {
-                        errors.push(`Can't find dependency: ${d} for ${taskOrMilestone.name}`);
+                        errors.push(`Can't find dependency: ${d} for ${taskOrMilestone.name}.`);
                     }
 
                     if (taskOrMilestone.deps.some(d => d === taskOrMilestone.name)) {
-                        errors.push(`Task ${taskOrMilestone.name} can't depend on itself.`);
+                        errors.push(`${label} ${taskOrMilestone.name} can't depend on itself.`);
                     }
                 }
             }
@@ -2297,8 +2303,17 @@ function validateTimeline(timeline) {
                 !!taskOrMilestone.swimlaneId && !swimlaneIds[taskOrMilestone.swimlaneId];
             if (invalidEmptySwimlane || invalidSwimlaneReference) {
                 errors.push(
-                    `Can't find swimlane ${taskOrMilestone.swimlaneId || "<not provided>"} for task ${taskOrMilestone.name}`,
+                    `Can't find swimlane ${taskOrMilestone.swimlaneId || "<not provided>"} for ${label} ${taskOrMilestone.name}.`,
                 );
+            }
+
+            console.log(config, taskOrMilestone);
+            if (config.checkMilestoneExactlyOrDeps) {
+                if (!(taskOrMilestone.interval?.exactly) && (!taskOrMilestone.deps || taskOrMilestone.deps.length === 0)) {
+                    errors.push(
+                        `If dependency array is empty for ${label} ${taskOrMilestone.name}, ${label}.interval.exactly must be set.`
+                    )
+                }
             }
         }
     }
@@ -2315,7 +2330,7 @@ function validateTimeline(timeline) {
                 const cycleIdx = currBackEdges.indexOf(dep);
                 if (cycleIdx !== -1) {
                     errors.push(
-                        `Cycle detected: ${currBackEdges.slice(cycleIdx).join(" -> ")} -> ${curr} -> ${dep}`,
+                        `Cycle detected: ${currBackEdges.slice(cycleIdx).join(" -> ")} -> ${curr} -> ${dep}.`,
                     );
                     checkErrorsAndFail();
                 }
@@ -2598,6 +2613,7 @@ async function flushTimeline() {
 
     try {
         notifyOptimizing();
+        validateTimeline(_timeline);
         _scheduledTimeline = await scheduleTasks(_timeline, timeout =>
             notifyOptimizingWithTimeout(timeout),
         );
