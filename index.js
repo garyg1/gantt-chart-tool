@@ -30,6 +30,7 @@ const container = document.getElementById("container");
 const monacoContainer = document.getElementById("monaco-container");
 const downloadButton = document.getElementById("download-button");
 const clipboardButton = document.getElementById("clipboard-button");
+const randomizeButton = document.getElementById("randomize-button");
 const tabsButton = document.getElementById("tabs-button");
 const viewTab = document.getElementById("view-tab");
 const editorTab = document.getElementById("editor-tab");
@@ -83,6 +84,7 @@ let _fontToLoad = null;
 let _lastKnownJson = null;
 let _mutated = false;
 var _randomTaskId = 1;
+let _getText = null;
 let _overwriteText = null;
 let _setThemeCb = null;
 let _renderNeeded = false;
@@ -115,6 +117,11 @@ setupPageLeavePrompt();
 
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
+setupThreeStateButton(
+    randomizeButton,
+    ["Randomize Style", "...", "Randomized!"],
+    writeRandomizedConfigToMonaco,
+);
 setupThreeStateButton(
     fixedIntervalsButton,
     ["Write Optimized Schedule", "...", "Written!"],
@@ -368,7 +375,6 @@ function makeSampleTimeline() {
         milestones: [
             makeRandomMilestone(
                 "Milestone 1",
-                "1",
                 taskSet1.map(t => t.name),
             ),
         ],
@@ -463,18 +469,22 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
 
 /**
  * @param {string} name
- * @param {string} swimlaneId
  * @param {string[]} deps
  */
-function makeRandomMilestone(name, swimlaneId, deps) {
+function makeRandomMilestone(name, deps) {
     const milestone = {
         name,
-        swimlaneId,
+        swimlaneId: "",
         deps: deps || [],
         /** @type {boolean?} */
         completed: null,
         hidden: false,
     };
+
+    delete milestone.swimlaneId;
+    delete milestone.completed;
+    delete milestone.hidden;
+
     return milestone;
 }
 
@@ -554,9 +564,9 @@ function setupThreeStateButton(button, labels, action) {
         e.preventDefault();
         setText(1);
         await action();
-        await sleep(200);
+        await sleep(120);
         setText(2);
-        setTimeout(() => setText(0), 1000);
+        setTimeout(() => setText(0), 700);
     };
     setText(0);
 }
@@ -1477,7 +1487,9 @@ function renderTimeline(rawTimeline) {
 
     let cumulativeTaskIndex = 0;
     let tasksWithGradientIndex = 0;
-    let numTasksWithGradient = timeline.swimlanes.filter(t => !t.color).length;
+    let numTasksWithGradient = timeline.swimlanes.filter(
+        s => !s.color && !s.isMilestoneVirtualSwimlane,
+    ).length;
     const perSwimlaneTasks = timeline.swimlanes
         .map((swimlane, swimlaneIndex, allSwimlanes) => {
             let colorToUse = swimlane.color;
@@ -1488,7 +1500,9 @@ function renderTimeline(rawTimeline) {
                 }
                 const rgb = interpolateColor(gradientComponents, t);
                 colorToUse = rgbToColor(rgb);
-                tasksWithGradientIndex += 1;
+                if (!swimlane.isMilestoneVirtualSwimlane) {
+                    tasksWithGradientIndex += 1;
+                }
             }
 
             return {
@@ -1989,6 +2003,8 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                 }
             });
 
+            const getText = () => editor.getModel().getValue();
+
             const overwriteText = textToWrite => {
                 editor.getModel().setValue(textToWrite);
             };
@@ -2016,7 +2032,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                 },
             });
 
-            resolve({ overwriteText, setTheme });
+            resolve({ getText, overwriteText, setTheme });
         });
     });
 }
@@ -2231,7 +2247,6 @@ function toEnUsOrd(ord) {
  * @returns {typeof _timeline}
  */
 function validateTimeline(timeline) {
-    console.log("validating", timeline);
     /** @type {string[]} */
     const errors = [];
     const checkErrorsAndFail = () => {
@@ -2316,7 +2331,6 @@ function validateTimeline(timeline) {
                 );
             }
 
-            console.log(config, taskOrMilestone);
             if (config.checkMilestoneExactlyOrDeps) {
                 if (
                     !taskOrMilestone.interval?.exactly &&
@@ -2380,15 +2394,20 @@ async function scheduleTasks(timeline, onSolvingStart) {
         timeline.config?.startDate,
         new Date(dateToIso(new Date())),
     );
-    const tasks = timeline.tasks.map((t, i) => ({
-        ...t,
-        durationDays: t.duration
-            ? parseDuration(t.duration)
-            : getDuration(t.interval.start, t.interval.end),
-        fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
-        fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
-        globalIndex: i,
-    }));
+    const tasks = timeline.tasks
+        .map(t => ({
+            ...t,
+            interval: t.interval ?? t.scheduledInterval,
+        }))
+        .map((t, i) => ({
+            ...t,
+            durationDays: t.duration
+                ? parseDuration(t.duration)
+                : getDuration(t.interval.start, t.interval.end),
+            fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
+            fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
+            globalIndex: i,
+        }));
 
     validateTimeline(timeline);
 
@@ -2658,18 +2677,65 @@ function setupPageLeavePrompt() {
     };
 }
 
-function writeOptimizedScheduleToMonaco() {
+function writeRandomizedConfigToMonaco() {
     if (_overwriteText !== null && _scheduledTimeline !== null) {
-        const timelineToWrite = {
-            ..._scheduledTimeline,
-            tasks: _scheduledTimeline.tasks.map(t => ({
-                ...t,
-                interval: {
-                    start: dateToIso(t.interval.start),
-                    end: dateToIso(t.interval.end),
-                },
-            })),
+        const makeHsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
+        const colorOptions = {
+            oneColor() {
+                const h = randRange(0, 360);
+                const s = randRange(0, 101);
+                const l1 = randRange(0, 101);
+                const l2 = randChoice(
+                    [
+                        l1 >= 30 ? randRange(0, l1 * 0.7 + 1) : null,
+                        l1 <= 70 ? randRange(l1 * 1.2, 101) : null,
+                    ].filter(a => a !== null),
+                );
+
+                return [
+                    { path: ["palette", "gradient"], value: [makeHsl(h, s, l1)] },
+                    { path: ["palette", "backgroundColor"], value: makeHsl(h, s, l2) },
+                ];
+            },
         };
+
+        const editFn = randChoice([colorOptions.oneColor]);
+        const edits = editFn();
+
+        const text = _getText();
+        const timelineToWrite = JSON.parse(text);
+
+        for (const { path, value } of edits) {
+            const objToMutate = path
+                .slice(0, -1)
+                .reduce((obj, p) => obj[p] || {}, timelineToWrite.config || {});
+            objToMutate[path[path.length - 1]] = value;
+        }
+
+        const timelineJson = stringifyJson(timelineToWrite);
+        _overwriteText(timelineJson);
+        writeToLocalStorage(timelineJson);
+    }
+}
+
+function writeOptimizedScheduleToMonaco() {
+    if (
+        _getText !== null &&
+        _overwriteText !== null &&
+        _scheduledTimeline !== null &&
+        !!_scheduledTimeline.tasks
+    ) {
+        const text = _getText();
+        const timelineToWrite = JSON.parse(text);
+        (timelineToWrite.tasks || []).forEach(t => {
+            const scheduledTask = _scheduledTimeline.tasks.find(stt => stt.name == t.name);
+            if (scheduledTask?.interval && !t.interval) {
+                t.scheduledInterval = {
+                    start: dateToIso(scheduledTask.interval.start),
+                    end: dateToIso(scheduledTask.interval.end),
+                };
+            }
+        });
         const timelineJson = stringifyJson(timelineToWrite);
         _overwriteText(timelineJson);
         writeToLocalStorage(timelineJson);
@@ -2692,7 +2758,8 @@ async function main() {
     });
     initializeMonacoEditorAsynchronously(jsonToUse, isDark, renderedJson =>
         writeToLocalStorage(renderedJson),
-    ).then(({ overwriteText, setTheme }) => {
+    ).then(({ getText, overwriteText, setTheme }) => {
+        _getText = getText;
         _overwriteText = overwriteText;
         _setTheme = setTheme;
     });
