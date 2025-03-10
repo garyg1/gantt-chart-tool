@@ -240,6 +240,17 @@
                         "type": ["boolean", "null"],
                         "description": "Whether to display this milestone as completed. Milestones are automatically completed when all their dependencies are completed.",
                         "default": false
+                    },
+                    "interval": {
+                        "type": "object",
+                        "description": "The start and end times for this milestone, if not auto-scheduled.",
+                        "properties": {
+                            "exactly": {
+                                "type": "string",
+                                "format": "date"
+                            }
+                        },
+                        "required": ["exactly"]
                     }
                 },
                 "required": ["name", "swimlaneId", "deps"]
