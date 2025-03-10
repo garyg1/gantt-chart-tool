@@ -1247,13 +1247,14 @@ function renderTimeline(rawTimeline) {
             }
             return a.interval.end.getTime() - b.interval.end.getTime();
         });
+    const rawMilestones = (rawTimeline.milestones || []);
     const minTaskDate = scheduledTasks
         .map(task => task.interval.start)
-        .concat(rawTimeline.milestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
+        .concat(rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
         .reduce((min, curr) => (!min || curr < min ? curr : min), JS_MAX_DATE);
     let maxTaskDate = scheduledTasks
         .map(task => task.interval.end)
-        .concat(rawTimeline.milestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
+        .concat(rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
         .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
     if (minTaskDate > maxTaskDate) {
         maxTaskDate = addDays(minTaskDate, 1);
