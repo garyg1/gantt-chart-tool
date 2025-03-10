@@ -6,11 +6,9 @@
         "palette": {
             "gradient": ["#3c5ca2", "seagreen"],
             "backgroundColor": "white",
-            "stripes": {}
+            "stripes": {  }
         },
-        "padding": {
-            "taskHeight": 23
-        },
+        "padding": { "taskHeight": 23 },
         "showDeps": false,
         "showCriticalPaths": true
     },
@@ -28,8 +26,7 @@
         },
         {
             "name": "Milestone 1B",
-            "swimlaneId": "2",
-            "deps": ["Task 1"],
+            "interval": { "exactly": "2025-01-01" },
             "hidden": false
         },
         {
