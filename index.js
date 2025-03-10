@@ -1247,14 +1247,18 @@ function renderTimeline(rawTimeline) {
             }
             return a.interval.end.getTime() - b.interval.end.getTime();
         });
-    const rawMilestones = (rawTimeline.milestones || []);
+    const rawMilestones = rawTimeline.milestones || [];
     const minTaskDate = scheduledTasks
         .map(task => task.interval.start)
-        .concat(rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
+        .concat(
+            rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)),
+        )
         .reduce((min, curr) => (!min || curr < min ? curr : min), JS_MAX_DATE);
     let maxTaskDate = scheduledTasks
         .map(task => task.interval.end)
-        .concat(rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)))
+        .concat(
+            rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)),
+        )
         .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
     if (minTaskDate > maxTaskDate) {
         maxTaskDate = addDays(minTaskDate, 1);
@@ -2227,7 +2231,7 @@ function toEnUsOrd(ord) {
  * @returns {typeof _timeline}
  */
 function validateTimeline(timeline) {
-    console.log('validating', timeline);
+    console.log("validating", timeline);
     /** @type {string[]} */
     const errors = [];
     const checkErrorsAndFail = () => {
@@ -2279,8 +2283,12 @@ function validateTimeline(timeline) {
     checkErrorsAndFail();
 
     const dependenciesToValidate = [
-        { label: 'task', data: timeline.tasks || [], config: { allowEmptySwimlane: false } },
-        { label: 'milestone', data: timeline.milestones || [], config: { allowEmptySwimlane: true, checkMilestoneExactlyOrDeps: true } },
+        { label: "task", data: timeline.tasks || [], config: { allowEmptySwimlane: false } },
+        {
+            label: "milestone",
+            data: timeline.milestones || [],
+            config: { allowEmptySwimlane: true, checkMilestoneExactlyOrDeps: true },
+        },
     ];
     for (const { data, label, config } of dependenciesToValidate) {
         for (const taskOrMilestone of data) {
@@ -2310,10 +2318,13 @@ function validateTimeline(timeline) {
 
             console.log(config, taskOrMilestone);
             if (config.checkMilestoneExactlyOrDeps) {
-                if (!(taskOrMilestone.interval?.exactly) && (!taskOrMilestone.deps || taskOrMilestone.deps.length === 0)) {
+                if (
+                    !taskOrMilestone.interval?.exactly &&
+                    (!taskOrMilestone.deps || taskOrMilestone.deps.length === 0)
+                ) {
                     errors.push(
-                        `If dependency array is empty for ${label} ${taskOrMilestone.name}, ${label}.interval.exactly must be set.`
-                    )
+                        `If dependency array is empty for ${label} ${taskOrMilestone.name}, ${label}.interval.exactly must be set.`,
+                    );
                 }
             }
         }
