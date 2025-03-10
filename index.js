@@ -2006,7 +2006,20 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
             const getText = () => editor.getModel().getValue();
 
             const overwriteText = textToWrite => {
-                editor.getModel().setValue(textToWrite);
+                const model = editor.getModel();
+                model.pushEditOperations(
+                    [],
+                    [
+                        {
+                            text: textToWrite,
+                            range: model.getFullModelRange(),
+                        },
+                    ],
+                    () => null,
+                );
+                // This saves the undo stack.
+                // Without this, subsequent pushEditOperations calls will overwrite the stack.
+                model.pushStackElement();
             };
 
             const setTheme = newIsDark => {
@@ -2670,8 +2683,8 @@ function initializeTimelineWorker() {
 
 function setupPageLeavePrompt() {
     window.onbeforeunload = e => {
-        const timelineHasUnsafedEdits = !readFromLocalStorage()[0] && _mutated;
-        if (timelineHasUnsafedEdits) {
+        const timelineHasUnsavedEdits = !readFromLocalStorage()[0] && _mutated;
+        if (timelineHasUnsavedEdits) {
             e.preventDefault();
         }
     };
