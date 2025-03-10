@@ -208,6 +208,32 @@
                 "required": ["id", "name"]
             }
         },
+        "milestones": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The displayed name and key for the task"
+                    },
+                    "swimlaneId": {
+                        "type": "string",
+                        "description": "The swimlane.id for the task."
+                    },
+                    "deps": {
+                        "type": "array",
+                        "description": "A list of task names that must be executed before this task.",
+                        "items": { "type": "string" }
+                    },
+                    "color": {
+                        "type": "string",
+                        "format": "color",
+                        "description": "Override the display color of this task."
+                    }
+                }
+            }
+        },
         "tasks": {
             "type": "array",
             "items": {
