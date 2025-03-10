@@ -70,6 +70,7 @@ const Z3_MAX_TIMEOUT_MS = 180_000;
 const RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS = 0.75;
 // https://stackoverflow.com/questions/11526504
 const JS_MIN_DATE = new Date(-8640000000000000);
+const COMPLETED_EMOJI = "✓";
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
@@ -1233,6 +1234,7 @@ function renderTimeline(rawTimeline) {
                 end: new Date(t.interval.end),
             },
             offset: { center: 0, start: 0, end: 0 },
+            _type: "task",
         }))
         .sort((a, b) => {
             const diff = a.interval.start.getTime() - b.interval.start.getTime();
@@ -1263,13 +1265,16 @@ function renderTimeline(rawTimeline) {
             .map(m => ({
                 ...m,
                 deps: m.deps || [],
+                _type: "milestone",
             }))
             .map(m => {
-                const milestoneTime = m.deps
+                const deps = m.deps
                     .map(depName => scheduledTasks.find(t => t.name === depName))
-                    .filter(t => !!t)
+                    .filter(t => !!t);
+                const milestoneTime = deps
                     .map(t => t.interval.end)
                     .reduce((max, end) => (end > max ? end : max), minTaskDate);
+                const completed = deps.every(d => d.completed);
                 return {
                     ...m,
                     interval: {
@@ -1283,6 +1288,7 @@ function renderTimeline(rawTimeline) {
                         center: 1,
                         end: milestoneRadius - 1,
                     },
+                    completed: m.completed ?? completed,
                 };
             }),
         config: rawTimeline.config || {},
@@ -1771,6 +1777,7 @@ function renderTimeline(rawTimeline) {
             .attr("text-anchor", "start")
             .attr("fill", taskLabelTextColor)
             .text(d => d.name);
+        // .style('font-weight', d => d.completed ? 'bold' : 'normal');
 
         basicTextAttributes(taskTextLabels);
 
@@ -1795,7 +1802,7 @@ function renderTimeline(rawTimeline) {
 
         const taskCompletionLabels = svg
             .selectAll("taskcompletionlabels")
-            .data(tasks)
+            .data([...tasks, ...milestones])
             .enter()
             .append("text")
             .attr("font-size", taskDateLabelTextSize)
@@ -1803,12 +1810,16 @@ function renderTimeline(rawTimeline) {
             .attr("y", getTaskY)
             .attr(
                 "dx",
-                d => dateScale(d.interval.end) - dateScale(d.interval.start) - completedTaskPadding,
+                d =>
+                    dateScale(d.interval.end) -
+                    dateScale(d.interval.start) -
+                    (d._type === "task" ? completedTaskPadding : d.offset.end - 2.75),
             )
             .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS + 0.5)
             .attr("opacity", d => (d.completed ? 1.0 : 0.0))
             .attr("fill", d => getContrastingColor(getTaskFill(d), 1.0, 1.0))
-            .text("✓");
+            .style("font-weight", "bold")
+            .text(COMPLETED_EMOJI);
         basicTextAttributes(taskCompletionLabels);
     }
 
