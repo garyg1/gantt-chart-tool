@@ -71,6 +71,7 @@ const RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS = 0.75;
 // https://stackoverflow.com/questions/11526504
 const JS_MIN_DATE = new Date(-8640000000000000);
 const COMPLETED_EMOJI = "✓";
+const VIRTUAL_SWIMLANE_ID = "_milestonevirtualswimlane";
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
@@ -1268,6 +1269,7 @@ function renderTimeline(rawTimeline) {
                 _type: "milestone",
             }))
             .map(m => {
+                const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
                 const deps = m.deps
                     .map(depName => scheduledTasks.find(t => t.name === depName))
                     .filter(t => !!t);
@@ -1278,8 +1280,8 @@ function renderTimeline(rawTimeline) {
                 return {
                     ...m,
                     interval: {
-                        start: addDays(milestoneTime, 1),
-                        end: addDays(milestoneTime, 1),
+                        start: exactly ?? addDays(milestoneTime, 1),
+                        end: exactly ?? addDays(milestoneTime, 1),
                     },
                     offset: {
                         start: milestoneRadius - 1,
@@ -1293,8 +1295,24 @@ function renderTimeline(rawTimeline) {
             }),
         config: rawTimeline.config || {},
     };
+    const anyGlobalMilestones = timeline.milestones.some(m => !m.swimlaneId);
+    if (anyGlobalMilestones) {
+        timeline.swimlanes = [
+            {
+                name: "",
+                isMilestoneVirtualSwimlane: true,
+                id: VIRTUAL_SWIMLANE_ID,
+            },
+            ...timeline.swimlanes,
+        ];
+        timeline.milestones
+            .filter(m => !m.swimlaneId)
+            .forEach(m => {
+                m.swimlaneId = VIRTUAL_SWIMLANE_ID;
+            });
+    }
     const swimlanesWithMilestones = uniq(
-        timeline.milestones.map(m => m.swimlaneId).filter(sid => !!sid),
+        timeline.milestones.map(m => m.swimlaneId).filter(s => !!s),
     );
 
     let font = parseStringOrDefault(timeline.config.font, null);
@@ -1341,7 +1359,9 @@ function renderTimeline(rawTimeline) {
     const dateScalePaddingX = 20;
     const labelPadding = 12;
     const dateRangePadding = 6;
-    const completedTaskPadding = 12;
+    const completedTaskPadding = 4;
+    const completedEmojiFontSize = taskHeight * 0.6;
+    const emojiSize = measureText(COMPLETED_EMOJI, completedEmojiFontSize, font);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const scaleLabelPadding = parseIntOrDefault(timeline.config.padding?.scaleLabels, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
@@ -1755,6 +1775,9 @@ function renderTimeline(rawTimeline) {
         if (milestones.length > 0) {
             const milestoneEnter = svg.selectAll("milestones").data(milestones).enter();
             appendMilestone(milestoneEnter, { mask: false });
+            if (useMask) {
+                appendMilestone(milestoneEnter, { mask: true });
+            }
         }
 
         const basicTextAttributes = enter => {
@@ -1777,7 +1800,6 @@ function renderTimeline(rawTimeline) {
             .attr("text-anchor", "start")
             .attr("fill", taskLabelTextColor)
             .text(d => d.name);
-        // .style('font-weight', d => d.completed ? 'bold' : 'normal');
 
         basicTextAttributes(taskTextLabels);
 
@@ -1805,15 +1827,11 @@ function renderTimeline(rawTimeline) {
             .data([...tasks, ...milestones])
             .enter()
             .append("text")
-            .attr("font-size", taskDateLabelTextSize)
-            .attr("x", d => dateScale(d.interval.start))
+            .attr("font-size", completedEmojiFontSize)
+            .attr("x", d => dateScale(d.interval.end))
             .attr("y", getTaskY)
-            .attr(
-                "dx",
-                d =>
-                    dateScale(d.interval.end) -
-                    dateScale(d.interval.start) -
-                    (d._type === "task" ? completedTaskPadding : d.offset.end - 2.75),
+            .attr("dx", d =>
+                d._type === "task" ? -completedTaskPadding - emojiSize : -emojiSize / 2,
             )
             .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS + 0.5)
             .attr("opacity", d => (d.completed ? 1.0 : 0.0))
@@ -1860,7 +1878,7 @@ function renderTimeline(rawTimeline) {
 
     const swimlaneEnter = svg
         .selectAll("swimlanelabel")
-        .data(perSwimlaneTasks.map(p => p.swimlane))
+        .data(perSwimlaneTasks.map(p => p.swimlane).filter(s => s.id !== VIRTUAL_SWIMLANE_ID))
         .enter();
 
     appendSwimlaneRect(swimlaneEnter, false);
@@ -2228,7 +2246,7 @@ function validateTimeline(timeline) {
         {
             name: "milestones",
             data: timeline.milestones || [],
-            props: [{ prop: "swimlaneId" }, { prop: "name" }],
+            props: [{ prop: "name" }],
         },
     ];
 
@@ -2253,26 +2271,35 @@ function validateTimeline(timeline) {
 
     checkErrorsAndFail();
 
-    for (const taskOrMilestone of (timeline.tasks || []).concat(timeline.milestones || [])) {
-        if (taskOrMilestone.deps) {
-            if (!Array.isArray(taskOrMilestone.deps)) {
-                errors.push(`"deps" array is invalid for ${taskOrMilestone.name}`);
-            } else {
-                const notFoundDeps = taskOrMilestone.deps.filter(d => !taskNames[d]);
-                for (const d of notFoundDeps) {
-                    errors.push(`Can't find dependency: ${d} for ${taskOrMilestone.name}`);
-                }
+    const dependenciesToValidate = [
+        { data: timeline.tasks || [], config: { allowEmptySwimlane: false } },
+        { data: timeline.milestones || [], config: { allowEmptySwimlane: true } },
+    ];
+    for (const { data, config } of dependenciesToValidate) {
+        for (const taskOrMilestone of data) {
+            if (taskOrMilestone.deps) {
+                if (!Array.isArray(taskOrMilestone.deps)) {
+                    errors.push(`"deps" array is invalid for ${taskOrMilestone.name}`);
+                } else {
+                    const notFoundDeps = taskOrMilestone.deps.filter(d => !taskNames[d]);
+                    for (const d of notFoundDeps) {
+                        errors.push(`Can't find dependency: ${d} for ${taskOrMilestone.name}`);
+                    }
 
-                if (taskOrMilestone.deps.some(d => d === taskOrMilestone.name)) {
-                    errors.push(`Task ${taskOrMilestone.name} can't depend on itself.`);
+                    if (taskOrMilestone.deps.some(d => d === taskOrMilestone.name)) {
+                        errors.push(`Task ${taskOrMilestone.name} can't depend on itself.`);
+                    }
                 }
             }
-        }
 
-        if (!taskOrMilestone.swimlaneId || !swimlaneIds[taskOrMilestone.swimlaneId]) {
-            errors.push(
-                `Can't find swimlane ${taskOrMilestone.swimlaneId || "<not provided>"} for task ${taskOrMilestone.name}`,
-            );
+            const invalidEmptySwimlane = !taskOrMilestone.swimlaneId && !config.allowEmptySwimlane;
+            const invalidSwimlaneReference =
+                !!taskOrMilestone.swimlaneId && !swimlaneIds[taskOrMilestone.swimlaneId];
+            if (invalidEmptySwimlane || invalidSwimlaneReference) {
+                errors.push(
+                    `Can't find swimlane ${taskOrMilestone.swimlaneId || "<not provided>"} for task ${taskOrMilestone.name}`,
+                );
+            }
         }
     }
 
