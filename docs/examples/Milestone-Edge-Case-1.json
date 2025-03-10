@@ -1,0 +1,29 @@
+{
+    "title": "Project A",
+    "config": {
+        "width": 700,
+        "font": "sans-serif",
+        "palette": {
+            "backgroundColor": "white"
+        },
+        "showDeps": false,
+        "showCriticalPaths": false
+    },
+    "swimlanes": [
+        {"id": "A", "name": "A" }
+    ],
+    "milestones": [
+        {
+            "name": "Milestone 1",
+            "interval": { "exactly": "2025-04-30" },
+            "hidden": false
+        }
+    ],
+    "tasks": [
+        {
+            "name": "A",
+            "duration": "P10D",
+            "swimlaneId": "A"
+        }
+    ]
+}

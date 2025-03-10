@@ -1,0 +1,23 @@
+{
+    "title": "Project A",
+    "config": {
+        "width": 700,
+        "font": "sans-serif",
+        "palette": {
+            "backgroundColor": "white"
+        },
+        "showDeps": false,
+        "showCriticalPaths": false
+    },
+    "swimlanes": [
+    ],
+    "milestones": [
+        {
+            "name": "Milestone 1",
+            "interval": { "exactly": "2025-04-01" },
+            "hidden": false
+        }
+    ],
+    "tasks": [
+    ]
+}
