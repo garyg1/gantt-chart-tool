@@ -2019,6 +2019,7 @@ async function initializeMonacoEditorAsynchronously(initialJson, isDark, onAfter
                 );
                 // This saves the undo stack.
                 // Without this, subsequent pushEditOperations calls will overwrite the stack.
+                // https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.ITextModel.html#pushEditOperations.pushEditOperations-1
                 model.pushStackElement();
             };
 
