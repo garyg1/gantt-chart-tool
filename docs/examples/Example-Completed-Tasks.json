@@ -2,7 +2,7 @@
     "title": "Project A",
     "config": {
         "width": 800,
-        "font": "Space Grotesk",
+        "googleFont": "Space Grotesk",
         "startDate": "2024-12-05",
         "dateLabels": true,
         "showDeps": false,

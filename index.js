@@ -68,6 +68,9 @@ const Z3_INITIAL_TIMEOUT_MS = 2000;
 const Z3_MAX_TIMEOUT_MS = 180_000;
 // <rect> and <text> do not align properly in chrome (2023-12-23), need very small adjustment
 const RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS = 0.75;
+// https://stackoverflow.com/questions/11526504
+const JS_MIN_DATE = new Date(-8640000000000000);
+const COMPLETED_EMOJI = "✓";
 
 let _z3 = null;
 let _debugGlobalMonacoEditor;
@@ -317,8 +320,10 @@ function prettifyJson(object, indent, lineLength) {
  * @typedef {Timeline['swimlanes'][0]} Swimlane
  * @typedef {Timeline['config']} Config
  * @typedef {Timeline['tasks'][0]} Task
+ * @typedef {Timeline['milestones'][0]} Milestone
  */
 function makeSampleTimeline() {
+    const taskSet1 = makeRandomTaskDAG(["1", "1", "1", "2"], 4);
     const timeline = {
         title: "Project A",
         config: {
@@ -356,15 +361,22 @@ function makeSampleTimeline() {
             { id: "4", name: "D", maxParallelism: 1 },
             { id: "5", name: "E", maxParallelism: 2 },
         ],
+        milestones: [
+            makeRandomMilestone(
+                "Milestone 1",
+                "1",
+                taskSet1.map(t => t.name),
+            ),
+        ],
         tasks: [
-            ...makeRandomTaskDAG(["1", "1", "1", "2"], 4),
+            ...taskSet1,
             ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 12),
             makeRandomFixedTask("Fixed Task A", "1"),
             makeRandomFixedTask("Fixed Task B", "2"),
         ],
     };
 
-    // remove from user examples, but keep types hints
+    // remove from user examples, but keep type hints
     delete timeline.config.palette.outlines;
     delete timeline.config.padding;
     delete timeline.config.fontSizes;
@@ -407,25 +419,6 @@ function makeRandomTaskDAG(swimlaneIds, numTasks) {
     return tasks;
 }
 
-// https://stackoverflow.com/questions/56393880
-function setupColorSchemeWatcher(cb) {
-    if (!window.matchMedia) {
-        return false;
-    }
-
-    let isDark = false;
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        isDark = true;
-    }
-
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", event => {
-        let newIsDark = !!event.matches;
-        cb(newIsDark);
-    });
-
-    return isDark;
-}
-
 /**
  * @param {string} name
  * @param {string} swimlaneId
@@ -462,6 +455,23 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
         task.width = 1;
     }
     return task;
+}
+
+/**
+ * @param {string} name
+ * @param {string} swimlaneId
+ * @param {string[]} deps
+ */
+function makeRandomMilestone(name, swimlaneId, deps) {
+    const milestone = {
+        name,
+        swimlaneId,
+        deps: deps || [],
+        /** @type {boolean?} */
+        completed: null,
+        hidden: false,
+    };
+    return milestone;
 }
 
 /**
@@ -591,6 +601,25 @@ function setupTabs(root, tabs, activeColor) {
     }
 
     refresh(0);
+}
+
+// https://stackoverflow.com/questions/56393880
+function setupColorSchemeWatcher(cb) {
+    if (!window.matchMedia) {
+        return false;
+    }
+
+    let isDark = false;
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        isDark = true;
+    }
+
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", event => {
+        let newIsDark = !!event.matches;
+        cb(newIsDark);
+    });
+
+    return isDark;
 }
 
 /** @param {number} ms */
@@ -919,7 +948,7 @@ function getDateRangeText(start, end) {
         timeZone: "UTC",
     });
     if (startText === endText) {
-        return start;
+        return startText;
     }
     return `${startText} - ${endText}`;
 }
@@ -1109,6 +1138,14 @@ function randChoice(arr) {
 }
 
 /**
+ * @template T
+ * @param {T[]} arr
+ */
+function uniq(arr) {
+    return [...new Set(arr)];
+}
+
+/**
  * @param {typeof _timeline} timeline
  */
 function assertTimelineValid(timeline) {
@@ -1184,31 +1221,81 @@ function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
 
+    const scheduledTasks = rawTimeline.tasks
+        .filter(t =>
+            (rawTimeline.swimlanes || [])
+                .filter(s => s.id === t.swimlaneId)
+                .some(s => s.hidden !== true),
+        )
+        .map(t => ({
+            ...t,
+            interval: {
+                start: new Date(t.interval.start),
+                end: new Date(t.interval.end),
+            },
+            offset: { center: 0, start: 0, end: 0 },
+            _type: "task",
+        }))
+        .sort((a, b) => {
+            const diff = a.interval.start.getTime() - b.interval.start.getTime();
+            if (diff != 0) {
+                return diff;
+            }
+            return a.interval.end.getTime() - b.interval.end.getTime();
+        });
+    const minTaskDate = scheduledTasks
+        .map(task => task.interval.start)
+        .reduce((min, curr) => (!min || curr < min ? curr : min), new Date());
+    let maxTaskDate = scheduledTasks
+        .map(task => task.interval.end)
+        .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
+    if (minTaskDate > maxTaskDate) {
+        maxTaskDate = addDays(minTaskDate, 1);
+    }
+
+    const taskHeight = parseIntOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
+    const milestoneRadius = taskHeight / 2;
+
     const timeline = {
         ...rawTimeline,
-        tasks: rawTimeline.tasks
-            .filter(t =>
-                (rawTimeline.swimlanes || [])
-                    .filter(s => s.id === t.swimlaneId)
-                    .some(s => s.hidden !== true),
-            )
-            .map(t => ({
-                ...t,
-                interval: {
-                    start: new Date(t.interval.start),
-                    end: new Date(t.interval.end),
-                },
-            }))
-            .sort((a, b) => {
-                const diff = a.interval.start.getTime() - b.interval.start.getTime();
-                if (diff != 0) {
-                    return diff;
-                }
-                return a.interval.end.getTime() - b.interval.end.getTime();
-            }),
+        tasks: scheduledTasks,
         swimlanes: (rawTimeline.swimlanes || []).filter(swimlane => swimlane.hidden !== true),
+        milestones: (rawTimeline.milestones || [])
+            .filter(milestone => milestone.hidden !== true)
+            .map(m => ({
+                ...m,
+                deps: m.deps || [],
+                _type: "milestone",
+            }))
+            .map(m => {
+                const deps = m.deps
+                    .map(depName => scheduledTasks.find(t => t.name === depName))
+                    .filter(t => !!t);
+                const milestoneTime = deps
+                    .map(t => t.interval.end)
+                    .reduce((max, end) => (end > max ? end : max), minTaskDate);
+                const completed = deps.every(d => d.completed);
+                return {
+                    ...m,
+                    interval: {
+                        start: addDays(milestoneTime, 1),
+                        end: addDays(milestoneTime, 1),
+                    },
+                    offset: {
+                        start: milestoneRadius - 1,
+                        // 1 to fix optical illusion involving line drawn into a circle's center.
+                        // Where it is also occluded by the circle.
+                        center: 1,
+                        end: milestoneRadius - 1,
+                    },
+                    completed: m.completed ?? completed,
+                };
+            }),
         config: rawTimeline.config || {},
     };
+    const swimlanesWithMilestones = uniq(
+        timeline.milestones.map(m => m.swimlaneId).filter(sid => !!sid),
+    );
 
     let font = parseStringOrDefault(timeline.config.font, null);
     const googleFont = parseStringOrDefault(timeline.config.googleFont, null);
@@ -1255,7 +1342,6 @@ function renderTimeline(rawTimeline) {
     const labelPadding = 12;
     const dateRangePadding = 6;
     const completedTaskPadding = 12;
-    const taskHeight = parseIntOrDefault(timeline.config.padding?.taskHeight, 15);
     const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
     const scaleLabelPadding = parseIntOrDefault(timeline.config.padding?.scaleLabels, 5);
     const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
@@ -1304,16 +1390,10 @@ function renderTimeline(rawTimeline) {
     const height =
         chartMarginTop +
         scaleMarginTop +
-        timeline.tasks.length * (taskHeight + taskPadding) +
+        (timeline.tasks.length + swimlanesWithMilestones.length) * (taskHeight + taskPadding) +
         timeline.swimlanes.length * swimlanePadding +
         2 * chartPaddingY;
 
-    const minTaskDate = timeline.tasks
-        .map(task => task.interval.start)
-        .reduce((min, curr) => (!min || curr < min ? curr : min), new Date());
-    const maxTaskDate = timeline.tasks
-        .map(task => task.interval.end)
-        .reduce((max, curr) => (!max || curr > max ? curr : max), new Date());
     const taskSpanDays = diffDays(minTaskDate, maxTaskDate);
     const dateScalePaddingDaysLeft = Math.ceil(taskSpanDays * dateScalePaddingPercentLeft);
     const dateScalePaddingDaysRight = Math.ceil(taskSpanDays * dateScalePaddingPercentRight);
@@ -1326,7 +1406,7 @@ function renderTimeline(rawTimeline) {
     // fixed point iteration for self-referential calculation
     const numIters = 10;
     for (let iter = 0; iter < numIters; iter++) {
-        [minScaleDate, maxScaleDate] = timeline.tasks
+        [minScaleDate, maxScaleDate] = [...timeline.tasks, ...timeline.milestones]
             .map(curr => {
                 const percentL =
                     (curr.interval.start - minScaleDate) / (maxScaleDate - minScaleDate);
@@ -1337,15 +1417,20 @@ function renderTimeline(rawTimeline) {
                 const nameSize = measureText(curr.name, taskNameLabelTextSize, font);
                 const dateRangeText = getDateRangeText(curr.interval.start, curr.interval.end);
                 const dateRangeSize = measureText(dateRangeText, taskDateLabelTextSize, font);
-                const rhsOverflow = rightEdge + textPadding + nameSize - chartPaddingX - scaleWidth;
-                const lhsOverflow = leftEdge - dateRangeSize - dateRangePadding;
+                const rhsOverflow =
+                    rightEdge +
+                    textPadding +
+                    curr.offset.end +
+                    nameSize -
+                    chartPaddingX -
+                    scaleWidth;
+                const lhsOverflow = leftEdge - dateRangeSize - curr.offset.start - dateRangePadding;
 
                 const pixelsToDays = (maxScaleDate - minScaleDate) / MILLIS_PER_DAY / scaleWidth;
                 const lhsOverflowDays = pixelsToDays * lhsOverflow;
                 const rhsOverflowDays = pixelsToDays * rhsOverflow;
                 const newMinScaleDate = addDays(minScaleDate, Math.floor(lhsOverflowDays));
                 const newMaxScaleDate = addDays(maxScaleDate, Math.ceil(rhsOverflowDays));
-
                 return [newMinScaleDate, newMaxScaleDate];
             })
             .reduce(
@@ -1382,6 +1467,16 @@ function renderTimeline(rawTimeline) {
             };
         })
         .map((swimlane, swimlaneIndex) => {
+            const milestones = timeline.milestones
+                .filter(milestone => milestone.swimlaneId === swimlane.id)
+                .map(milestone => ({
+                    ...milestone,
+                    swimlane,
+                    swimlaneIndex,
+                    taskIndexOverall: cumulativeTaskIndex,
+                }));
+            const isMilestone = milestones.length > 0;
+
             const tasks = timeline.tasks
                 .filter(task => task.swimlaneId === swimlane.id)
                 .map((task, taskIndexInSwimlane) => ({
@@ -1389,18 +1484,20 @@ function renderTimeline(rawTimeline) {
                     swimlane,
                     swimlaneIndex,
                     taskIndexInSwimlane,
-                    taskIndexOverall: taskIndexInSwimlane + cumulativeTaskIndex,
+                    taskIndexOverall:
+                        taskIndexInSwimlane + cumulativeTaskIndex + (isMilestone ? 1 : 0),
                 }));
 
+            const heightInTasks = tasks.length + (isMilestone ? 1 : 0);
             const swimlaneWithCount = {
                 ...swimlane,
                 swimlaneIndex,
                 taskIndexOverall: cumulativeTaskIndex,
-                numTasks: tasks.length,
+                numTasks: heightInTasks,
             };
-            cumulativeTaskIndex += tasks.length;
+            cumulativeTaskIndex += heightInTasks;
 
-            return { tasks, swimlane: swimlaneWithCount };
+            return { tasks, milestones, swimlane: swimlaneWithCount };
         });
 
     const svg = d3
@@ -1512,7 +1609,91 @@ function renderTimeline(rawTimeline) {
         swimlanePadding / 2 +
         (getStrokeHexForTask(d) ? 0.5 : 0);
 
-    for (const { tasks, swimlane } of perSwimlaneTasks) {
+    if (timeline.config.showDeps || timeline.config.showCriticalPaths) {
+        const getTaskYForDep = t => getTaskY(t) + taskHeight / 2;
+
+        const { showDeps, showCriticalPaths } = timeline.config;
+        const dateScaleDuration = maxScaleDate - minScaleDate;
+        const depColor = "grey";
+        const getDepOpacityAndColor = ([d0, d1]) => {
+            const diff = d1.interval.start - d0.interval.end;
+            if (showCriticalPaths && diff <= MILLIS_PER_DAY) {
+                const gradientId = "g" + Math.random().toString().split(".")[1];
+                const gradient = svg
+                    .append("linearGradient")
+                    .attr("id", gradientId)
+                    .attr("gradientUnits", "userSpaceOnUse")
+                    .attr("x1", dateScale(d0.interval.end) + d0.offset.center)
+                    .attr("y1", getTaskYForDep(d0))
+                    .attr("x2", dateScale(d1.interval.start) - d1.offset.center)
+                    .attr("y2", getTaskYForDep(d1));
+                const startColor = getStrokeHexForTask(d0) ?? getTaskFill(d0);
+                const endColor = getStrokeHexForTask(d1) ?? getTaskFill(d1);
+                gradient.append("stop").attr("offset", "0%").attr("stop-color", startColor);
+                gradient.append("stop").attr("offset", "100%").attr("stop-color", endColor);
+                return { opacity: 0.8, color: `url(#${gradientId})`, width: 2 };
+            }
+            if (!showDeps) {
+                return { opacity: 0.0, color: depColor, width: 0 };
+            }
+            if (!showCriticalPaths) {
+                return { opacity: 1.0, color: depColor, width: 1 };
+            }
+            const closenessLinear = (d1.interval.start - d0.interval.end) / dateScaleDuration;
+            const opacity = Math.max(0.5, Math.min(0.7, 0.5 - closenessLinear));
+            return { opacity, color: depColor, width: 1 };
+        };
+
+        const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
+        const allMilestones = perSwimlaneTasks.flatMap(p => p.milestones);
+        const deps = [];
+        for (const task of allTasks) {
+            for (const depName of task.deps || []) {
+                const dep = allTasks.find(t => t.name === depName);
+                if (!dep) {
+                    log("Can't find dependency?", task, allTasks);
+                    continue;
+                }
+                deps.push([dep, task]);
+            }
+        }
+        for (const milestone of allMilestones) {
+            for (const depName of milestone.deps) {
+                const dep = allTasks.find(t => t.name === depName);
+                if (!dep) {
+                    log("Can't find dependency?", milestone, allTasks);
+                    continue;
+                }
+                deps.push([dep, milestone]);
+            }
+        }
+
+        const getX = d => ({
+            x1:
+                dateScale(d[0].interval.end) +
+                d[0].offset.center -
+                (getStrokeHexForTask(d[0]) ? 0 : 1),
+            x2:
+                dateScale(d[1].interval.start) -
+                d[1].offset.center +
+                (getStrokeHexForTask(d[1]) ? 0 : 1),
+        });
+
+        const depLines = svg
+            .selectAll("taskDep")
+            .data(deps)
+            .enter()
+            .append("line")
+            .attr("stroke-width", d => getDepOpacityAndColor(d).width)
+            .attr("stroke", d => getDepOpacityAndColor(d).color)
+            .attr("stroke-opacity", d => getDepOpacityAndColor(d).opacity)
+            .attr("x1", d => getX(d).x1)
+            .attr("x2", d => getX(d).x2)
+            .attr("y1", d => getTaskYForDep(d[0]))
+            .attr("y2", d => getTaskYForDep(d[1]));
+    }
+
+    for (const { tasks, milestones, swimlane } of perSwimlaneTasks) {
         const appendTaskRect = (enter, { mask }) => {
             let x = enter
                 .append("rect")
@@ -1539,11 +1720,41 @@ function renderTimeline(rawTimeline) {
             }
         };
 
+        const appendMilestone = (enter, { mask }) => {
+            let x = enter
+                .append("circle")
+                .datum(d => {
+                    d.strokeHex = getStrokeHexForTask(d);
+                    return d;
+                })
+                .attr("cx", d => dateScale(d.interval.end))
+                .attr("cy", d => getTaskY(d) + milestoneRadius)
+                .attr("r", milestoneRadius)
+                .attr("fill", d => {
+                    const fillColor = getTaskFill(d);
+                    if (mask) {
+                        return getContrastingColor(fillColor, maskStrength, maskStrength);
+                    }
+                    return fillColor;
+                })
+                .attr("stroke", d => d.strokeHex)
+                .attr("stroke-width", d => (d.strokeHex ? 1 : 0));
+
+            if (mask) {
+                x.attr("mask", d => getMask(d.swimlane));
+            }
+        };
+
         const rectEnter = svg.selectAll("taskbars").data(tasks).enter();
 
         appendTaskRect(rectEnter, { mask: false });
         if (useMask) {
             appendTaskRect(rectEnter, { mask: true });
+        }
+
+        if (milestones.length > 0) {
+            const milestoneEnter = svg.selectAll("milestones").data(milestones).enter();
+            appendMilestone(milestoneEnter, { mask: false });
         }
 
         const basicTextAttributes = enter => {
@@ -1555,25 +1766,18 @@ function renderTimeline(rawTimeline) {
         // TODO: split into multiple lines on overflow
         const taskTextLabels = svg
             .selectAll("tasktextlabels")
-            .data(tasks)
+            .data([...tasks, ...milestones])
             .enter()
             .append("text")
-            .attr("x", d => dateScale(d.interval.end))
-            .attr(
-                "y",
-                d =>
-                    chartMarginTop +
-                    scaleMarginTop +
-                    (taskHeight + taskPadding) * d.taskIndexOverall +
-                    swimlanePadding * d.swimlaneIndex +
-                    swimlanePadding / 2,
-            )
+            .attr("x", d => dateScale(d.interval.end) + d.offset.end)
+            .attr("y", getTaskY)
             .attr("dx", textPadding)
             .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS)
             .attr("font-size", taskNameLabelTextSize)
             .attr("text-anchor", "start")
             .attr("fill", taskLabelTextColor)
             .text(d => d.name);
+        // .style('font-weight', d => d.completed ? 'bold' : 'normal');
 
         basicTextAttributes(taskTextLabels);
 
@@ -1581,20 +1785,12 @@ function renderTimeline(rawTimeline) {
             // TODO: fix overflow into left margin
             const taskDateLabels = svg
                 .selectAll("taskdatelabels")
-                .data(tasks)
+                .data(tasks.concat(milestones))
                 .enter()
                 .append("text")
                 .attr("x", d => dateScale(d.interval.start))
-                .attr("y", d => {
-                    return (
-                        chartMarginTop +
-                        scaleMarginTop +
-                        (taskHeight + taskPadding) * d.taskIndexOverall +
-                        swimlanePadding * d.swimlaneIndex +
-                        swimlanePadding / 2
-                    );
-                })
-                .attr("dx", d => -dateRangePadding)
+                .attr("y", getTaskY)
+                .attr("dx", d => -dateRangePadding - d.offset.start)
                 .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS)
                 .attr("fill", taskDateLabelTextColor)
                 .attr("font-size", taskDateLabelTextSize)
@@ -1606,7 +1802,7 @@ function renderTimeline(rawTimeline) {
 
         const taskCompletionLabels = svg
             .selectAll("taskcompletionlabels")
-            .data(tasks)
+            .data([...tasks, ...milestones])
             .enter()
             .append("text")
             .attr("font-size", taskDateLabelTextSize)
@@ -1614,12 +1810,16 @@ function renderTimeline(rawTimeline) {
             .attr("y", getTaskY)
             .attr(
                 "dx",
-                d => dateScale(d.interval.end) - dateScale(d.interval.start) - completedTaskPadding,
+                d =>
+                    dateScale(d.interval.end) -
+                    dateScale(d.interval.start) -
+                    (d._type === "task" ? completedTaskPadding : d.offset.end - 2.75),
             )
             .attr("dy", d => taskHeight / 2 + RECT_TEXT_ALIGNMENT_OFFSET_HACK_PIXELS + 0.5)
             .attr("opacity", d => (d.completed ? 1.0 : 0.0))
             .attr("fill", d => getContrastingColor(getTaskFill(d), 1.0, 1.0))
-            .text("✓");
+            .style("font-weight", "bold")
+            .text(COMPLETED_EMOJI);
         basicTextAttributes(taskCompletionLabels);
     }
 
@@ -1698,73 +1898,6 @@ function renderTimeline(rawTimeline) {
         .attr("text-anchor", "middle")
         .attr("font-family", font)
         .attr("fill", d => getContrastingColor(d.color, 0.8, 1.0));
-
-    if (timeline.config.showDeps || timeline.config.showCriticalPaths) {
-        const getTaskY = t =>
-            chartMarginTop +
-            scaleMarginTop +
-            (taskHeight + taskPadding) * t.taskIndexOverall +
-            swimlanePadding * t.swimlaneIndex +
-            taskHeight / 2;
-
-        const { showDeps, showCriticalPaths } = timeline.config;
-        const dateScaleDuration = maxScaleDate - minScaleDate;
-        const depColor = "grey";
-        const getDepOpacityAndColor = ([d0, d1]) => {
-            const diff = d1.interval.start - d0.interval.end;
-            if (showCriticalPaths && diff <= MILLIS_PER_DAY) {
-                const gradientId = "g" + Math.random().toString().split(".")[1];
-                const gradient = svg
-                    .append("linearGradient")
-                    .attr("id", gradientId)
-                    .attr("gradientUnits", "userSpaceOnUse")
-                    .attr("x1", dateScale(d0.interval.end))
-                    .attr("y1", getTaskY(d0))
-                    .attr("x2", dateScale(d1.interval.start))
-                    .attr("y2", getTaskY(d1));
-                const startColor = getStrokeHexForTask(d0) ?? getTaskFill(d0);
-                const endColor = getStrokeHexForTask(d1) ?? getTaskFill(d1);
-                gradient.append("stop").attr("offset", "0%").attr("stop-color", startColor);
-                gradient.append("stop").attr("offset", "100%").attr("stop-color", endColor);
-                return { opacity: 0.8, color: `url(#${gradientId})`, width: 2 };
-            }
-            if (!showDeps) {
-                return { opacity: 0.0, color: depColor, width: 0 };
-            }
-            if (!showCriticalPaths) {
-                return { opacity: 1.0, color: depColor, width: 1 };
-            }
-            const closenessLinear = (d1.interval.start - d0.interval.end) / dateScaleDuration;
-            const opacity = Math.max(0.5, Math.min(0.7, 0.5 - closenessLinear));
-            return { opacity, color: depColor, width: 1 };
-        };
-
-        const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
-        const deps = [];
-        for (const task of allTasks) {
-            for (const depName of task.deps || []) {
-                const dep = allTasks.find(t => t.name === depName);
-                if (!dep) {
-                    log("Can't find dependency?", task, allTasks);
-                    continue;
-                }
-                deps.push([dep, task]);
-            }
-        }
-
-        const depLines = svg
-            .selectAll("taskDep")
-            .data(deps)
-            .enter()
-            .append("line")
-            .attr("stroke-width", d => getDepOpacityAndColor(d).width)
-            .attr("stroke", d => getDepOpacityAndColor(d).color)
-            .attr("stroke-opacity", d => getDepOpacityAndColor(d).opacity)
-            .attr("x1", d => dateScale(d[0].interval.end) - (getStrokeHexForTask(d[0]) ? 0 : 1))
-            .attr("x2", d => dateScale(d[1].interval.start) + (getStrokeHexForTask(d[1]) ? 0 : 1))
-            .attr("y1", d => getTaskY(d[0]))
-            .attr("y2", d => getTaskY(d[1]));
-    }
 
     return svg.node();
 }
@@ -2078,51 +2211,67 @@ function validateTimeline(timeline) {
         }
     };
 
-    let ord = 1;
     const taskNames = {};
-    for (const task of timeline.tasks) {
-        if (!task || !task.name) {
-            errors.push(`The ${toEnUsOrd(ord)} task is missing a "name" property.`);
-        }
-        if (taskNames[task.name]) {
-            errors.push(`Multiple tasks cannot have name '${task.name}'`);
-        }
-        taskNames[task.name] = task;
-
-        ord++;
-    }
-
-    ord = 1;
     const swimlaneIds = {};
-    for (const swimlane of timeline.swimlanes) {
-        if (!swimlane || !swimlane.id) {
-            errors.push(`The ${toEnUsOrd(ord)} swimlane is missing an "id" property.`);
+
+    const propsToStringCheck = [
+        {
+            name: "tasks",
+            data: timeline.tasks || [],
+            props: [{ prop: "name", unique: true, index: taskNames }],
+        },
+        {
+            name: "swimlanes",
+            data: timeline.swimlanes || [],
+            props: [{ prop: "id", index: swimlaneIds }],
+        },
+        {
+            name: "milestones",
+            data: timeline.milestones || [],
+            props: [{ prop: "swimlaneId" }, { prop: "name" }],
+        },
+    ];
+
+    for (const { name, data, props } of propsToStringCheck) {
+        let ord = 1;
+        for (const { prop, unique, index } of props) {
+            for (const entry of data) {
+                if (!entry || !entry[prop]) {
+                    errors.push(`The ${toEnUsOrd(ord)} ${name} is missing a "${prop}" property.`);
+                }
+                const value = entry[prop];
+                if (unique && index && index[value]) {
+                    errors.push(`Multiple ${name}s cannot have ${prop} '${value}'`);
+                }
+                if (index) {
+                    index[value] = entry;
+                }
+                ord++;
+            }
         }
-        ord++;
-        swimlaneIds[swimlane.id] = swimlane;
     }
 
     checkErrorsAndFail();
 
-    for (const task of timeline.tasks) {
-        if (task.deps) {
-            if (!Array.isArray(task.deps)) {
-                errors.push(`"deps" array is invalid for ${task.name}`);
+    for (const taskOrMilestone of (timeline.tasks || []).concat(timeline.milestones || [])) {
+        if (taskOrMilestone.deps) {
+            if (!Array.isArray(taskOrMilestone.deps)) {
+                errors.push(`"deps" array is invalid for ${taskOrMilestone.name}`);
             } else {
-                const notFoundDeps = task.deps.filter(d => !taskNames[d]);
+                const notFoundDeps = taskOrMilestone.deps.filter(d => !taskNames[d]);
                 for (const d of notFoundDeps) {
-                    errors.push(`Can't find dependency: ${d} for ${task.name}`);
+                    errors.push(`Can't find dependency: ${d} for ${taskOrMilestone.name}`);
                 }
 
-                if (task.deps.some(d => d === task.name)) {
-                    errors.push(`Task ${task.name} can't depend on itself.`);
+                if (taskOrMilestone.deps.some(d => d === taskOrMilestone.name)) {
+                    errors.push(`Task ${taskOrMilestone.name} can't depend on itself.`);
                 }
             }
         }
 
-        if (!task.swimlaneId || !swimlaneIds[task.swimlaneId]) {
+        if (!taskOrMilestone.swimlaneId || !swimlaneIds[taskOrMilestone.swimlaneId]) {
             errors.push(
-                `Can't find swimlane ${task.swimlaneId || "<not provided>"} for task ${task.name}`,
+                `Can't find swimlane ${taskOrMilestone.swimlaneId || "<not provided>"} for task ${taskOrMilestone.name}`,
             );
         }
     }
@@ -2130,7 +2279,7 @@ function validateTimeline(timeline) {
     checkErrorsAndFail();
 
     // very naive cycle detection (N^4) - need to consult my copy of CLRS
-    for (const task of timeline.tasks) {
+    for (const task of timeline.tasks || []) {
         const stack = [[task.name, []]];
         while (stack.length > 0) {
             const [curr, currBackEdges] = stack.pop();

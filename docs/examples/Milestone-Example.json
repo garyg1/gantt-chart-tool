@@ -1,0 +1,71 @@
+{
+    "title": "Project A",
+    "config": {
+        "width": 700,
+        "font": "sans-serif",
+        "palette": {
+            "gradient": ["#3c5ca2", "seagreen"],
+            "backgroundColor": "white"
+        },
+        "showDeps": false,
+        "showCriticalPaths": true
+    },
+    "swimlanes": [
+        { "id": "1", "name": "A", "maxParallelism": 3 },
+        { "id": "2", "name": "B", "maxParallelism": 2 },
+        { "id": "3", "name": "C", "maxParallelism": 2 }
+    ],
+    "milestones": [
+        {
+            "name": "Milestone 1",
+            "swimlaneId": "1",
+            "deps": ["Task 1", "Task 2"],
+            "hidden": false
+        },
+        {
+            "name": "Milestone 1B",
+            "swimlaneId": "2",
+            "deps": ["Task 1"],
+            "hidden": false
+        },
+        {
+            "name": "Milestone 2",
+            "swimlaneId": "2",
+            "deps": ["Task 1", "Task 3"],
+            "completed": false,
+            "hidden": false
+        },
+        {
+            "name": "Milestone 3",
+            "swimlaneId": "3",
+            "deps": ["Task 2", "Task 3"],
+            "completed": true,
+            "hidden": false
+        }
+    ],
+    "tasks": [
+        {
+            "name": "Task 1",
+            "swimlaneId": "1",
+            "duration": "P3W",
+            "deps": [],
+            "completed": true,
+            "importance": 2
+        },
+        {
+            "name": "Task 2",
+            "swimlaneId": "2",
+            "duration": "P10D",
+            "deps": ["Task 1"],
+            "width": 1
+        },
+        {
+            "name": "Task 3",
+            "swimlaneId": "3",
+            "duration": "P15D",
+            "deps": ["Task 1"],
+            "completed": true,
+            "width": 1
+        }
+    ]
+}
