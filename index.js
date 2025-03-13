@@ -30,7 +30,8 @@ const container = document.getElementById("container");
 const monacoContainer = document.getElementById("monaco-container");
 const downloadButton = document.getElementById("download-button");
 const clipboardButton = document.getElementById("clipboard-button");
-const randomizeButton = document.getElementById("randomize-button");
+const randomizeColorButton = document.getElementById("randomize-color-button");
+const randomizeFontButton = document.getElementById("randomize-font-button");
 const tabsButton = document.getElementById("tabs-button");
 const viewTab = document.getElementById("view-tab");
 const editorTab = document.getElementById("editor-tab");
@@ -81,6 +82,7 @@ let _z3 = null;
 let _debugGlobalMonacoEditor;
 let _timeline = makeSampleTimeline();
 let _fontToLoad = null;
+let _googleFontMetadata = null;
 let _lastKnownJson = null;
 let _mutated = false;
 var _randomTaskId = 1;
@@ -112,20 +114,27 @@ const _cssFontGenericNames = [
     "emoji",
     "fangsong",
 ];
+const _bannedGoogleFonts = ["Rubik Pixels"].map(f => f.toLocaleLowerCase());
 
 setupPageLeavePrompt();
 
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
 setupThreeStateButton(
-    randomizeButton,
-    ["Randomize Style", "...", "Randomized!"],
-    writeRandomizedConfigToMonaco,
+    randomizeColorButton,
+    ["Colors", "...", "Done!"],
+    () => writeRandomizedConfigToMonaco({ randomizeStyle: true }),
+    false,
+);
+setupThreeStateButton(
+    randomizeFontButton,
+    ["Fonts", "...", "Done!"],
+    () => writeRandomizedConfigToMonaco({ randomizeFont: true }),
     false,
 );
 setupThreeStateButton(
     fixedIntervalsButton,
-    ["Write Optimized Schedule", "...", "Written!"],
+    ["Write optimized schedule", "...", "Written!"],
     writeOptimizedScheduleToMonaco,
 );
 
@@ -575,7 +584,9 @@ function setupThreeStateButton(button, labels, action, longTimeouts = true) {
         e.preventDefault();
         setText(1);
         await action();
-        await sleep(longTimeouts ? 100 : 0);
+        if (longTimeouts) {
+            await sleep(120);
+        }
         setText(2);
         setTimeout(() => setText(0), longTimeouts ? 1000 : 200);
     };
@@ -849,6 +860,11 @@ async function loadGoogleFont() {
 
     const url = `https://fonts.googleapis.com/css2?family=${fontName}`;
     try {
+        if (_bannedGoogleFonts.includes(fontName.toLocaleLowerCase())) {
+            console.warn(`Font '${fontName}' is banned.`, response.status);
+            return;
+        }
+
         const response = await fetch(url);
         if (response.status < 200 || response.status >= 400) {
             console.warn(`Font '${fontName}' does not exist`, response.status);
@@ -861,13 +877,7 @@ async function loadGoogleFont() {
                 text
                     .split("\n")
                     .map(t => t.split(" src: url(")[1])
-                    .filter(
-                        url =>
-                            url &&
-                            url.startsWith &&
-                            url.startsWith("https://") &&
-                            url.endsWith(") format('woff2');"),
-                    )
+                    .filter(u => u && u.startsWith("https://") && u.endsWith(") format('woff2');"))
                     .map(raw => ({
                         url: raw.split(") format('woff2');")[0],
                         original: raw,
@@ -917,7 +927,17 @@ function initializeGoogleFontsWorker() {
         await loadGoogleFont(_fontToLoad);
         window.setTimeout(tryLoadFont, 1000);
     }
+    async function tryLoadGoogleFontList() {
+        try {
+            _googleFontMetadata = (
+                await fetch("google-font-families.json").then(r => r.json())
+            ).filter(font => !_bannedGoogleFonts.includes(font.name.toLocaleLowerCase()));
+        } catch (err) {
+            console.warn("Couldn't load Google fonts list for randomization.", err);
+        }
+    }
     window.setTimeout(tryLoadFont, 0);
+    window.setTimeout(tryLoadGoogleFontList, 0);
 }
 
 /** @param {string} json */
@@ -2301,6 +2321,11 @@ function validateTimeline(timeline) {
         }
     };
 
+    const googleFont = timeline?.config?.googleFont;
+    if (googleFont && _bannedGoogleFonts.includes(googleFont.toLocaleLowerCase())) {
+        errors.push(`The font ${googleFont} causes problems on my machine so I have disabled it.`);
+    }
+
     const taskNames = {};
     const swimlaneIds = {};
 
@@ -2709,7 +2734,7 @@ async function flushTimeline() {
 function initializeTimelineWorker() {
     async function runFlushJob() {
         await flushTimeline();
-        window.setTimeout(runFlushJob, 250);
+        window.setTimeout(runFlushJob, 500);
     }
     window.setTimeout(runFlushJob, 0);
 }
@@ -2723,7 +2748,7 @@ function setupPageLeavePrompt() {
     };
 }
 
-function writeRandomizedConfigToMonaco() {
+function writeRandomizedConfigToMonaco({ randomizeStyle, randomizeFont }) {
     if (_overwriteText !== null && _scheduledTimeline !== null) {
         const makeHsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
 
@@ -2792,9 +2817,30 @@ function writeRandomizedConfigToMonaco() {
                 ]);
             },
         };
+        const fontOptions = {
+            randomFont() {
+                if (_googleFontMetadata === null) {
+                    // no edits
+                    return [];
+                }
 
-        const editFn = randChoice(Object.values(colorOptions));
-        const edits = editFn();
+                const font = randChoice(_googleFontMetadata);
+                return [
+                    { path: ["font"], value: null },
+                    { path: ["googleFont"], value: font.name },
+                ];
+            },
+        };
+
+        const colorEditFn = randChoice(Object.values(colorOptions));
+        const fontEditFn = randChoice(Object.values(fontOptions));
+        const edits = [];
+        if (randomizeFont) {
+            edits.push(...fontEditFn());
+        }
+        if (randomizeStyle) {
+            edits.push(...colorEditFn());
+        }
 
         const text = _getText();
         const timelineToWrite = JSON.parse(text);
@@ -2844,7 +2890,7 @@ function log(...args) {
     console.log(...args);
 }
 
-async function main() {
+function main() {
     log("running script");
 
     const [exists, storedJson] = readFromLocalStorage();
