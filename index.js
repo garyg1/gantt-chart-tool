@@ -121,6 +121,7 @@ setupThreeStateButton(
     randomizeButton,
     ["Randomize Style", "...", "Randomized!"],
     writeRandomizedConfigToMonaco,
+    false,
 );
 setupThreeStateButton(
     fixedIntervalsButton,
@@ -374,11 +375,7 @@ function makeSampleTimeline() {
             { id: "5", name: "E", maxParallelism: 2 },
         ],
         milestones: [
-            makeRandomMilestone(
-                "Milestone 1",
-                null,
-                START_DATE_ISO,
-            ),
+            makeRandomMilestone("Milestone 1", null, START_DATE_ISO),
             makeRandomMilestone(
                 "Milestone 2",
                 taskSet1.map(t => t.name),
@@ -557,7 +554,7 @@ function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textC
  * @param {[string, string, string]} labels
  * @param {() => Promise} action
  */
-function setupThreeStateButton(button, labels, action) {
+function setupThreeStateButton(button, labels, action, longTimeouts = true) {
     labels = labels.slice();
     const originalColor = button.style.color;
     const originalTextDecoration = button.style.textDecoration;
@@ -578,9 +575,9 @@ function setupThreeStateButton(button, labels, action) {
         e.preventDefault();
         setText(1);
         await action();
-        await sleep(120);
+        await sleep(longTimeouts ? 100 : 0);
         setText(2);
-        setTimeout(() => setText(0), 700);
+        setTimeout(() => setText(0), longTimeouts ? 1000 : 200);
     };
     setText(0);
 }
@@ -702,6 +699,9 @@ const measureText = (() => {
     const context = canvas.getContext("2d");
 
     return function measureText(text, fontSize, font) {
+        if (_loadedWoff2s[font]) {
+            context.styl;
+        }
         context.font = fontSize + "px " + font;
         return context.measureText(text).width;
     };
@@ -805,6 +805,13 @@ function addStylesheetWithUrl(url, fontName) {
     document.getElementsByTagName("head")[0].appendChild(link);
 }
 
+/** @param {string} woff2 */
+function addWoff2GloballyToDoc(woff2) {
+    const link = document.createElement("style");
+    link.textContent = woff2;
+    document.getElementsByTagName("head")[0].appendChild(link);
+}
+
 /** @param {string} fontName */
 function getGFontConsent(fontName) {
     if (window._hasGfontConsent === null) {
@@ -877,6 +884,9 @@ async function loadGoogleFont() {
                     text = text.replace(original, woff2b64 + ");");
                 }
             }
+
+            // so the text-measuring canvas has access to them
+            addWoff2GloballyToDoc(text, fontName);
 
             _loadedWoff2s[fontName] = text;
             if (!_loadedGoogleFonts.includes(fontName)) {
@@ -1146,6 +1156,14 @@ function getContrastingColor(color, tBlack, tWhite, background) {
  */
 function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
+}
+
+function modulo(n, m) {
+    let r = n % m;
+    if (r < 0) {
+        r += m;
+    }
+    return r;
 }
 
 /** @param {number[]} arr */
@@ -2708,26 +2726,74 @@ function setupPageLeavePrompt() {
 function writeRandomizedConfigToMonaco() {
     if (_overwriteText !== null && _scheduledTimeline !== null) {
         const makeHsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
+
+        // No idea about color theory
+        const hueVar = name => randRange(0, 359);
+        const satVar = name => randRange(0, 100);
+        const lumVar = name => randRange(0, 100);
+        const randomHsl = () => [hueVar(), satVar(), lumVar()];
+
+        const contrastingSL = (s1, l1) => {
+            const l2 = randChoice(
+                [
+                    l1 >= 30 ? randRange(0, l1 * 0.7 + 1) : null,
+                    l1 <= 70 ? randRange(l1 * 1.2, 101) : null,
+                ].filter(a => a !== null),
+            );
+            // more luminance => more saturated
+            const s2 =
+                l2 > l1
+                    ? Math.min(100, randRange(s1 + 10, s1 + 30))
+                    : Math.max(
+                          0,
+                          randRange(Math.min(s1 * 0.5, s1 - 30), Math.min(s1 * 0.75, s1 - 10)),
+                      );
+            return [s2, l2];
+        };
+
         const colorOptions = {
             oneColor() {
-                const h = randRange(0, 360);
-                const s = randRange(0, 101);
-                const l1 = randRange(0, 101);
-                const l2 = randChoice(
-                    [
-                        l1 >= 30 ? randRange(0, l1 * 0.7 + 1) : null,
-                        l1 <= 70 ? randRange(l1 * 1.2, 101) : null,
-                    ].filter(a => a !== null),
-                );
+                const [h, s, l1] = randomHsl();
+                const [_, l2] = contrastingSL(s, l1);
 
                 return [
+                    { path: ["palette", "outlines"], value: null },
                     { path: ["palette", "gradient"], value: [makeHsl(h, s, l1)] },
                     { path: ["palette", "backgroundColor"], value: makeHsl(h, s, l2) },
                 ];
             },
+            oneColorVarySaturation() {
+                const [h, s, l1] = randomHsl();
+                const [s2, l2] = contrastingSL(s, l1);
+
+                return [
+                    { path: ["palette", "outlines"], value: null },
+                    { path: ["palette", "gradient"], value: [makeHsl(h, s, l1)] },
+                    { path: ["palette", "backgroundColor"], value: makeHsl(h, s2, l2) },
+                ];
+            },
+            twoColors() {
+                const [h1, s1, l1] = randomHsl();
+                const h2 = randChoice([h1 + 120, h1 - 120, h1 + 180].map(x => modulo(x, 360)));
+                const [s2, l2] = contrastingSL(s1, l1);
+
+                return [
+                    { path: ["palette", "outlines"], value: null },
+                    { path: ["palette", "gradient"], value: [makeHsl(h1, s1, l1)] },
+                    { path: ["palette", "backgroundColor"], value: makeHsl(h2, s2, l2) },
+                ];
+            },
+            twoColorsCartoonOutlines() {
+                return colorOptions.twoColors().concat([
+                    {
+                        path: ["palette", "outlines"],
+                        value: { thresholdL1: 1000000, strength: 1 },
+                    },
+                ]);
+            },
         };
 
-        const editFn = randChoice([colorOptions.oneColor]);
+        const editFn = randChoice(Object.values(colorOptions));
         const edits = editFn();
 
         const text = _getText();
@@ -2737,7 +2803,11 @@ function writeRandomizedConfigToMonaco() {
             const objToMutate = path
                 .slice(0, -1)
                 .reduce((obj, p) => obj[p] || {}, timelineToWrite.config || {});
-            objToMutate[path[path.length - 1]] = value;
+            if (!value) {
+                delete objToMutate[path[path.length - 1]];
+            } else {
+                objToMutate[path[path.length - 1]] = value;
+            }
         }
 
         const timelineJson = stringifyJson(timelineToWrite);
