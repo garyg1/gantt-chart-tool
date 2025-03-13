@@ -90,6 +90,7 @@ let _getText = null;
 let _overwriteText = null;
 let _setThemeCb = null;
 let _renderNeeded = false;
+let _firstRenderMade = false;
 let _scheduledTimeline = null;
 window._hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
 let _lastSolverCacheKey = null;
@@ -97,6 +98,7 @@ let _lastSolverUsed = null;
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
 const _triedFonts = new Set();
+const _failedFonts = new Set();
 const _loadedWoff2s = {};
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
 const _cssFontGenericNames = [
@@ -128,7 +130,7 @@ setupThreeStateButton(
 );
 setupThreeStateButton(
     randomizeFontButton,
-    ["Fonts", "...", "Done!"],
+    ["Font", "...", "Done!"],
     () => writeRandomizedConfigToMonaco({ randomizeFont: true }),
     false,
 );
@@ -666,33 +668,22 @@ async function sleep(ms) {
 }
 
 /**
- * @param {() => boolean} action
- * @param {number} timeoutMs
+ * @param {Function} fn 
+ * @param {number} maxTimeMs 
+ * @returns {boolean} Whether the fn returned true before maxTimeMs.
  */
-function pollWithTimeout(action, timeoutMs) {
-    const start = new Date();
-    return new Promise((resolve, reject) => {
-        function checkAction() {
-            let result = false;
-            try {
-                result = action();
-            } catch (err) {
-                console.warn("Got error while polling", err);
-            }
-
-            if (result) {
-                resolve();
-                return;
-            }
-
-            if (new Date() - start > timeoutMs) {
-                reject(new Error("Timed out"));
-            }
-
-            setTimeout(checkAction, 250);
+async function pollSane(fn, maxTimeMs) {
+    let currTimeMs = 5;
+    let done = false;
+    const endPromise = sleep(maxTimeMs).then(() => { done = true; });
+    while (!fn()) {
+        await Promise.any([endPromise, sleep(currTimeMs)]);
+        currTimeMs = currTimeMs * 3 / 2;
+        if (done) {
+            return false;
         }
-        setTimeout(checkAction, 0);
-    });
+    }
+    return true;
 }
 
 // https://stackoverflow.com/a/18650249
@@ -704,17 +695,50 @@ function blobToBase64(blob) {
     });
 }
 
+/** @param {string} str */
+function trimQuotes(str) {
+    if (str && str.startsWith('"')) {
+            return str.slice(1, -1);
+    }
+    return str;
+}
+
+/**
+ * Determines whehther a font has loaded in the browser and
+ * is ready for use and *measurement*.
+ * See https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/check
+ * @param {string} font 
+ * @returns Whether the font is loaded.
+ */
+function checkFont(font) {
+    return document.fonts.check("12px " + font);
+}
+
 // https://stackoverflow.com/a/35373030
 const measureText = (() => {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
 
+    const cache = {};
+
+    /**
+     * @param {string} text
+     * @param {string} fontSize
+     * @param {string} font
+     */
     return function measureText(text, fontSize, font) {
-        if (_loadedWoff2s[font]) {
-            context.styl;
+        const fontNameRaw = trimQuotes(font);
+        const key = `${text} ${fontSize} ${fontNameRaw}`;
+        if (cache[key] && false) {
+            return cache[key];
         }
+
         context.font = fontSize + "px " + font;
-        return context.measureText(text).width;
+        const size = context.measureText(text).width;
+        if (_loadedGoogleFonts.includes(fontNameRaw)) {
+            cache[key] = size;
+        }
+        return size
     };
 })();
 
@@ -877,7 +901,7 @@ async function loadGoogleFont() {
                 text
                     .split("\n")
                     .map(t => t.split(" src: url(")[1])
-                    .filter(u => u && u.startsWith("https://") && u.endsWith(") format('woff2');"))
+                    .filter(u => u && u.startsWith("https://fonts.gstatic.com") && u.endsWith(") format('woff2');"))
                     .map(raw => ({
                         url: raw.split(") format('woff2');")[0],
                         original: raw,
@@ -897,17 +921,26 @@ async function loadGoogleFont() {
 
             // so the text-measuring canvas has access to them
             addWoff2GloballyToDoc(text, fontName);
-
+            
+            measureText("_loadedWoff2s", 12, fontName);
             _loadedWoff2s[fontName] = text;
+            log(`Font '${fontName}' has been downloaded. Waiting for it to load in browser... (max 5s)`);
+            if (!await pollSane(() => checkFont(fontName), 5000)) {
+                throw new Error("Failed to load font in browser.");
+            }
+
             if (!_loadedGoogleFonts.includes(fontName)) {
                 _loadedGoogleFonts.push(fontName);
             }
+            log(`'${fontName}' loaded in browser.`);
         } catch (e) {
+            _failedFonts.add(fontName);
             console.warn("Caught exception parsing woff2", fontName, e);
             // swallow because we can still render in browser
             addStylesheetWithUrl(url, fontName);
         }
     } catch (e) {
+        _failedFonts.add(fontName);
         console.warn("Caught exception loading font", fontName, e);
         return;
     }
@@ -1392,8 +1425,16 @@ function renderTimeline(rawTimeline) {
 
     if (googleFont !== null) {
         triggerLoadGoogleFont(googleFont);
-        font = googleFont;
+        if (_loadedGoogleFonts.includes(googleFont)) {
+            font = googleFont;
+        }
+        else if (_firstRenderMade && !_failedFonts.has(googleFont)) {
+            // don't render if we don't have the font and we haven't tried yet
+            // avoids visual issues associated with font swapping
+            return null;
+        }
     }
+    
     const woff2Stylesheet = googleFont ? _loadedWoff2s[googleFont] : null;
 
     if (font === null) {
@@ -2722,6 +2763,11 @@ async function flushTimeline() {
 
         notifyRendering();
         const svg = renderTimeline(_scheduledTimeline);
+        if (!svg) {
+            _renderNeeded = true;
+            return;
+        }
+        _firstRenderMade = true;
         clearChildren(container);
         container.append(svg);
         notifyRendered();
@@ -2734,7 +2780,7 @@ async function flushTimeline() {
 function initializeTimelineWorker() {
     async function runFlushJob() {
         await flushTimeline();
-        window.setTimeout(runFlushJob, 500);
+        window.setTimeout(runFlushJob, 250);
     }
     window.setTimeout(runFlushJob, 0);
 }
