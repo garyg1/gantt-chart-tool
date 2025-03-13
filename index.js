@@ -335,6 +335,7 @@ function prettifyJson(object, indent, lineLength) {
  */
 function makeSampleTimeline() {
     const taskSet1 = makeRandomTaskDAG(["1", "1", "1", "2"], 4);
+    const taskSet2 = makeRandomTaskDAG(["1", "2", "3", "4", "5"], 12);
     const timeline = {
         title: "Project A",
         config: {
@@ -375,12 +376,17 @@ function makeSampleTimeline() {
         milestones: [
             makeRandomMilestone(
                 "Milestone 1",
+                null,
+                START_DATE_ISO,
+            ),
+            makeRandomMilestone(
+                "Milestone 2",
                 taskSet1.map(t => t.name),
             ),
         ],
         tasks: [
             ...taskSet1,
-            ...makeRandomTaskDAG(["1", "2", "3", "4", "5"], 12),
+            ...taskSet2,
             makeRandomFixedTask("Fixed Task A", "1"),
             makeRandomFixedTask("Fixed Task B", "2"),
         ],
@@ -471,19 +477,27 @@ function makeRandomFloatingTask(name, swimlaneId, deps) {
  * @param {string} name
  * @param {string[]} deps
  */
-function makeRandomMilestone(name, deps) {
+function makeRandomMilestone(name, deps, exactly) {
     const milestone = {
         name,
         swimlaneId: "",
-        deps: deps || [],
+        deps: deps,
         /** @type {boolean?} */
         completed: null,
         hidden: false,
+        interval: { exactly: exactly },
     };
 
+    // remove from user examples, but keep type hints
     delete milestone.swimlaneId;
     delete milestone.completed;
     delete milestone.hidden;
+    if (!exactly) {
+        delete milestone.interval;
+    }
+    if (!deps) {
+        delete milestone.deps;
+    }
 
     return milestone;
 }
