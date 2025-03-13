@@ -253,7 +253,8 @@
                         "required": ["exactly"]
                     }
                 },
-                "required": ["name", "swimlaneId", "deps"]
+                "anyOf": [{ "required": ["deps"] }, { "required": ["interval"] }],
+                "required": ["name"]
             }
         },
         "tasks": {
