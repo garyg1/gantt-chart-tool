@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const baseUrl = "http://localhost:8080/";
-const downloadsDir = "/Users/testt/Downloads";
+const downloadsDir = "/Users/gary/Downloads";
 const testDir = "./docs/examples";
 const outDir = "./docs/generatedImages";
 

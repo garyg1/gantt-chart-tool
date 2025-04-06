@@ -91,6 +91,13 @@
                             "type": "string",
                             "format": "color",
                             "description": "Color of completed tasks."
+                        },
+                        "textLabelOpacity": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1,
+                            "default": 1,
+                            "description": "Opacity of the text label backgrounds"
                         }
                     },
                     "required": []
