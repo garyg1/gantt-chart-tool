@@ -1,9 +1,11 @@
-# Gantt Chart Auto-scheduling Tool
-A simple, free (MIT), offline tool to autoschedule timelines completely in the browser. Optimization uses Microsoft Z3 WebAssembly.
+# Gantt Chart Tool and Auto-optimizer
+A simple, free (MIT), offline tool to render and automatically optimize timelines. Runs locally in the browser. The optimizer runs in WebAssembly, which runs a Z3 program (Z3 is a theorem prover).
+
+![A screenshot of the tool](docs/images/Tool%20Screenshot.png)
 
 ### Features
 * Define timelines in a JSON DSL ([schema](https://github.com/garyg1/gantt-chart-tool/blob/main/schema.json)).
-* Automatically schedule timelines based on task estimates and dependencies. The optimization runs locally in the browser via Microsoft Z3 Theorem Prover.
+* Automatically schedule timelines based on task estimates and dependencies. The optimization runs locally in the browser via Z3 Theorem Prover.
 * Optional Google Fonts integration - use Google Fonts by specifying `googleFont`. Confirmation popup before making any external network calls. This feature is entirely optional.
 
 ### Supported Browsers
