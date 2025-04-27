@@ -1,6 +1,8 @@
 # Gantt Chart Tool and Auto-optimizer
 A simple, free (MIT), offline tool to render and automatically optimize timelines. Runs locally in the browser. The optimizer runs in WebAssembly, which runs a Z3 program (Z3 is a theorem prover).
 
+[https://garygurlaskie.com/gantt-chart-tool](https://garygurlaskie.com/gantt-chart-tool)
+
 ![A screenshot of the tool](docs/images/Tool%20Screenshot.png)
 
 ### Features
