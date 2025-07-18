@@ -3,6 +3,7 @@
     "config": {
         "width": 700,
         "font": "sans-serif",
+        "startDate": "2025-04-01",
         "palette": {
             "backgroundColor": "white"
         },

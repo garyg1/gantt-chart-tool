@@ -2,6 +2,7 @@
     "title": "Project A",
     "config": {
         "width": 700,
+        "startDate": "2024-11-10",
         "font": "sans-serif",
         "palette": {
             "gradient": ["#3c5ca2", "seagreen"],
