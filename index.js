@@ -60,6 +60,7 @@ const DEFAULT_PADDING_TASKS = 5;
 const DEFAULT_PADDING_SWIMLANES = 5;
 const DEFAULT_PADDING_CHARTX = 10;
 const DEFAULT_PADDING_CHARTY = 5;
+const DEFAULT_PADDING_TEXT_LINE_HEIGHT = 1.1;
 const DEFAULT_TASKNAMES_FONTSIZE = 12;
 const DEFAULT_TASKDATES_FONTSIZE = 10;
 const DEFAULT_TITLE_FONTSIZE = 22;
@@ -360,6 +361,7 @@ function makeSampleTimeline() {
                 swimlanes: DEFAULT_PADDING_SWIMLANES,
                 chartX: DEFAULT_PADDING_CHARTX,
                 chartY: DEFAULT_PADDING_CHARTY,
+                textLineHeight: DEFAULT_PADDING_TEXT_LINE_HEIGHT,
             },
             fontSizes: {
                 taskNames: DEFAULT_TASKNAMES_FONTSIZE,
@@ -987,7 +989,7 @@ function removeNonAlphanum(str) {
  * @param {any} maybeInt
  * @param {number} defaultIfNotInt
  */
-function parseIntOrDefault(maybeInt, defaultIfNotInt) {
+function parseNumberOrDefault(maybeInt, defaultIfNotInt) {
     if (typeof maybeInt === "number") {
         return maybeInt;
     }
@@ -1290,7 +1292,7 @@ function renderTimeline(rawTimeline) {
         maxTaskDate = addDays(minTaskDate, 1);
     }
 
-    const taskHeight = parseIntOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
+    const taskHeight = parseNumberOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
     const milestoneRadius = taskHeight / 2;
 
     const timeline = {
@@ -1367,32 +1369,32 @@ function renderTimeline(rawTimeline) {
     // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#family-name
     font = _cssFontGenericNames.includes(font.toLocaleLowerCase()) ? font : `"${font}"`;
 
-    const width = parseIntOrDefault(timeline.config.width, DEFAULT_WIDTH);
+    const width = parseNumberOrDefault(timeline.config.width, DEFAULT_WIDTH);
     const dateLabels = parseBoolOrDefault(timeline.config.dateLabels, DEFAULT_USE_DATE_LABELS);
     const [hasGradient, gradientComponents] = parseGradient(timeline.config.palette?.gradient);
-    const maskSize = parseIntOrDefault(timeline.config.palette?.stripes?.size, MASK_SIZE);
-    const maskStrength = parseIntOrDefault(
+    const maskSize = parseNumberOrDefault(timeline.config.palette?.stripes?.size, MASK_SIZE);
+    const maskStrength = parseNumberOrDefault(
         timeline.config.palette?.stripes?.strength,
         MASK_STRENGTH,
     );
     const useMask = !!timeline.config.palette?.stripes;
-    const strokeThresholdL1 = parseIntOrDefault(
+    const strokeThresholdL1 = parseNumberOrDefault(
         timeline.config.palette?.outlines?.thresholdL1,
         STROKE_THRESHOLD,
     );
-    const strokeDarkness = parseIntOrDefault(
+    const strokeDarkness = parseNumberOrDefault(
         timeline.config.palette?.outlines?.strength,
         STROKE_DARKNESS,
     );
-    const textLabelOpacity = parseIntOrDefault(
+    const textLabelOpacity = parseNumberOrDefault(
         timeline.config.palette?.textLabelOpacity,
         TEXT_LABEL_OPACITY,
     );
-    const taskNameLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.taskNames, 12);
-    const taskDateLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.taskDates, 10);
-    const scaleLabelTextSize = parseIntOrDefault(timeline.config.fontSizes?.scaleLabels, 10);
+    const taskNameLabelTextSize = parseNumberOrDefault(timeline.config.fontSizes?.taskNames, 12);
+    const taskDateLabelTextSize = parseNumberOrDefault(timeline.config.fontSizes?.taskDates, 10);
+    const scaleLabelTextSize = parseNumberOrDefault(timeline.config.fontSizes?.scaleLabels, 10);
     const titleTextSize = timeline.title
-        ? parseIntOrDefault(timeline.config.fontSizes?.title, 20)
+        ? parseNumberOrDefault(timeline.config.fontSizes?.title, 20)
         : 0;
 
     const textPadding = 6;
@@ -1402,22 +1404,23 @@ function renderTimeline(rawTimeline) {
     const completedTaskPadding = 4;
     const completedEmojiFontSize = taskHeight * 0.6;
     const emojiSize = measureText(COMPLETED_EMOJI, completedEmojiFontSize, font);
-    const taskPadding = parseIntOrDefault(timeline.config.padding?.tasks, 5);
-    const scaleLabelPadding = parseIntOrDefault(timeline.config.padding?.scaleLabels, 5);
-    const swimlanePadding = parseIntOrDefault(timeline.config.padding?.swimlanes, 5);
+    const taskPadding = parseNumberOrDefault(timeline.config.padding?.tasks, 5);
+    const textLineHeight = parseNumberOrDefault(timeline.config.padding?.textLineHeight, 1);
+    const scaleLabelPadding = parseNumberOrDefault(timeline.config.padding?.scaleLabels, 5);
+    const swimlanePadding = parseNumberOrDefault(timeline.config.padding?.swimlanes, 5);
     const useNice = parseBoolOrDefault(timeline.config.padding?.niceDateScale, false);
-    const dateScalePaddingPercent = parseIntOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
+    const dateScalePaddingPercent = parseNumberOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
     const dateScalePaddingPercentLeft =
-        parseIntOrDefault(timeline.config.padding?.dateScaleLeft, dateScalePaddingPercent * 100) *
+        parseNumberOrDefault(timeline.config.padding?.dateScaleLeft, dateScalePaddingPercent * 100) *
         0.01;
     const dateScalePaddingPercentRight =
-        parseIntOrDefault(timeline.config.padding?.dateScaleRight, dateScalePaddingPercent * 100) *
+        parseNumberOrDefault(timeline.config.padding?.dateScaleRight, dateScalePaddingPercent * 100) *
         0.01;
-    const chartPaddingX = parseIntOrDefault(
+    const chartPaddingX = parseNumberOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
     );
-    const chartPaddingY = parseIntOrDefault(
+    const chartPaddingY = parseNumberOrDefault(
         timeline.config.padding?.chartY,
         DEFAULT_PADDING_CHARTY,
     );
@@ -1436,7 +1439,7 @@ function renderTimeline(rawTimeline) {
     const taskLabelTextColor = getContrastingColor(backgroundColor, 0.9, 0.9);
     const titleTextColor = taskLabelTextColor;
     const taskDateLabelTextColor = getContrastingColor(backgroundColor, 0.55, 0.6);
-    const xAxisGridTicks = parseIntOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
+    const xAxisGridTicks = parseNumberOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
     const titlePaddingTop = timeline.title ? 8 : 0;
     const titlePaddingBottom = timeline.title ? 18 : 0;
     const maxSwimlaneLabelWidth = timeline.swimlanes.reduce(
@@ -1947,7 +1950,18 @@ function renderTimeline(rawTimeline) {
 
     const swimlaneRectLabels = svg
         .selectAll("swimlanelabel")
-        .data(perSwimlaneTasks.map(p => p.swimlane))
+        .data(
+            perSwimlaneTasks.flatMap(p =>
+                p.swimlane.name
+                    .split("\n")
+                    .map((row, rowIndex, rows) => ({
+                        ...p.swimlane,
+                        name: row,
+                        rowIndex,
+                        numRows: rows.length - 1,
+                    })),
+            ),
+        )
         .enter()
         .append("text")
         .text(d => d.name)
@@ -1958,7 +1972,8 @@ function renderTimeline(rawTimeline) {
                 chartMarginTop +
                 scaleMarginTop +
                 (taskHeight + taskPadding) * d.taskIndexOverall +
-                swimlanePadding * d.swimlaneIndex,
+                swimlanePadding * d.swimlaneIndex +
+                textLineHeight * taskNameLabelTextSize * (d.rowIndex - (d.numRows / 2)),
         )
         .attr("dx", 0)
         .attr(
@@ -1974,6 +1989,7 @@ function renderTimeline(rawTimeline) {
         .attr("height", d => (taskHeight + taskPadding) * d.numTasks)
         .attr("text-anchor", "middle")
         .attr("font-family", font)
+        .attr("white-space", "normal")
         .attr("fill", d => getContrastingColor(d.color, 0.8, 1.0));
 
     return svg.node();
@@ -2313,25 +2329,28 @@ function validateTimeline(timeline) {
             label: "task",
             data: timeline.tasks || [],
             props: [{ prop: "name", unique: true, index: taskNames }],
+            keys: ["name"],
         },
         {
             label: "swimlane",
             data: timeline.swimlanes || [],
             props: [
                 { prop: "id", unique: true, index: swimlaneIds },
-                { mutex: ["maxParallelism", "groupedWith"], keys: ["name", "id"] },
+                { mutex: ["maxParallelism", "groupedWith"] },
             ],
+            keys: ["name", "id"],
         },
         {
             label: "milestone",
             data: timeline.milestones || [],
             props: [{ prop: "name" }],
+            keys: ["name"],
         },
     ];
 
-    for (const { label, data, props } of propsToStringCheck) {
+    for (const { label, data, props, keys } of propsToStringCheck) {
         let ord = 1;
-        for (const { prop, unique, index, mutex, keys } of props) {
+        for (const { prop, unique, index, mutex } of props) {
             for (const entry of data) {
                 if (prop) {
                     if (!entry || !entry[prop]) {

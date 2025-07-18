@@ -113,6 +113,11 @@
                             "type": "integer",
                             "description": "Height (in pixels) of tasks."
                         },
+                        "textLineHeight": {
+                            "type": "number",
+                            "description": "Line height for multi-line strings, where supported, as a multiple of text size.",
+                            "default": 1.1
+                        },
                         "swimlanes": {
                             "type": "integer",
                             "description": "Padding (in pixels) between swimlanes."
