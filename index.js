@@ -1352,6 +1352,8 @@ function renderTimeline(rawTimeline) {
     const swimlanesWithMilestones = uniq(
         timeline.milestones.map(m => m.swimlaneId).filter(s => !!s),
     );
+    /** @param {Swimlane} s */
+    const getSwimlaneNameRows = s => s.name.split("\n").map(l => l.trim());
 
     let font = parseStringOrDefault(timeline.config.font, null);
     const googleFont = parseStringOrDefault(timeline.config.googleFont, null);
@@ -1409,13 +1411,18 @@ function renderTimeline(rawTimeline) {
     const scaleLabelPadding = parseNumberOrDefault(timeline.config.padding?.scaleLabels, 5);
     const swimlanePadding = parseNumberOrDefault(timeline.config.padding?.swimlanes, 5);
     const useNice = parseBoolOrDefault(timeline.config.padding?.niceDateScale, false);
-    const dateScalePaddingPercent = parseNumberOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
+    const dateScalePaddingPercent =
+        parseNumberOrDefault(timeline.config.padding?.dateScale, 5) * 0.01;
     const dateScalePaddingPercentLeft =
-        parseNumberOrDefault(timeline.config.padding?.dateScaleLeft, dateScalePaddingPercent * 100) *
-        0.01;
+        parseNumberOrDefault(
+            timeline.config.padding?.dateScaleLeft,
+            dateScalePaddingPercent * 100,
+        ) * 0.01;
     const dateScalePaddingPercentRight =
-        parseNumberOrDefault(timeline.config.padding?.dateScaleRight, dateScalePaddingPercent * 100) *
-        0.01;
+        parseNumberOrDefault(
+            timeline.config.padding?.dateScaleRight,
+            dateScalePaddingPercent * 100,
+        ) * 0.01;
     const chartPaddingX = parseNumberOrDefault(
         timeline.config.padding?.chartX,
         DEFAULT_PADDING_CHARTX,
@@ -1442,10 +1449,12 @@ function renderTimeline(rawTimeline) {
     const xAxisGridTicks = parseNumberOrDefault(timeline.config.gridTicks, DEFAULT_GRID_TICKS);
     const titlePaddingTop = timeline.title ? 8 : 0;
     const titlePaddingBottom = timeline.title ? 18 : 0;
-    const maxSwimlaneLabelWidth = timeline.swimlanes.reduce(
-        (max, curr) => Math.max(measureText(curr.name, taskNameLabelTextSize, font), max),
-        0,
-    );
+    const maxSwimlaneLabelWidth = timeline.swimlanes
+        .flatMap(getSwimlaneNameRows)
+        .reduce(
+            (max, currLabel) => Math.max(measureText(currLabel, taskNameLabelTextSize, font), max),
+            0,
+        );
     const chartMarginTop =
         20 + titleTextSize + titlePaddingTop + titlePaddingBottom + chartPaddingY;
     let chartMarginLeft = Math.max(100, maxSwimlaneLabelWidth + labelPadding * 2);
@@ -1952,14 +1961,12 @@ function renderTimeline(rawTimeline) {
         .selectAll("swimlanelabel")
         .data(
             perSwimlaneTasks.flatMap(p =>
-                p.swimlane.name
-                    .split("\n")
-                    .map((row, rowIndex, rows) => ({
-                        ...p.swimlane,
-                        name: row,
-                        rowIndex,
-                        numRows: rows.length - 1,
-                    })),
+                getSwimlaneNameRows(p.swimlane).map((row, rowIndex, rows) => ({
+                    ...p.swimlane,
+                    name: row,
+                    rowIndex,
+                    numRows: rows.length - 1,
+                })),
             ),
         )
         .enter()
@@ -1973,7 +1980,7 @@ function renderTimeline(rawTimeline) {
                 scaleMarginTop +
                 (taskHeight + taskPadding) * d.taskIndexOverall +
                 swimlanePadding * d.swimlaneIndex +
-                textLineHeight * taskNameLabelTextSize * (d.rowIndex - (d.numRows / 2)),
+                textLineHeight * taskNameLabelTextSize * (d.rowIndex - d.numRows / 2),
         )
         .attr("dx", 0)
         .attr(
