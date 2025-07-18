@@ -371,15 +371,11 @@ function makeSampleTimeline() {
             { id: "1", name: "A", maxParallelism: 3 },
             { id: "2", name: "B", maxParallelism: 2 },
             { id: "3", name: "C", maxParallelism: 1, hidden: false },
-            { id: "4", name: "D", maxParallelism: 1 },
+            { id: "4", name: "D", groupedWith: "3" },
             { id: "5", name: "E", maxParallelism: 2 },
         ],
         milestones: [
-            makeRandomMilestone(
-                "Milestone 1",
-                null,
-                START_DATE_ISO,
-            ),
+            makeRandomMilestone("Milestone 1", null, START_DATE_ISO),
             makeRandomMilestone(
                 "Milestone 2",
                 taskSet1.map(t => t.name),
@@ -2273,6 +2269,7 @@ function getCacheKey(tasks, swimlanes) {
     const swimlaneKeys = swimlanes.map(s => {
         return {
             maxParallelism: s.maxParallelism || 1,
+            groupedWith: s.groupedWith || "",
             id: s.id,
         };
     });
@@ -2313,17 +2310,20 @@ function validateTimeline(timeline) {
 
     const propsToStringCheck = [
         {
-            label: "tasks",
+            label: "task",
             data: timeline.tasks || [],
             props: [{ prop: "name", unique: true, index: taskNames }],
         },
         {
-            label: "swimlanes",
+            label: "swimlane",
             data: timeline.swimlanes || [],
-            props: [{ prop: "id", index: swimlaneIds }],
+            props: [
+                { prop: "id", unique: true, index: swimlaneIds },
+                { mutex: ["maxParallelism", "groupedWith"], keys: ["name", "id"] },
+            ],
         },
         {
-            label: "milestones",
+            label: "milestone",
             data: timeline.milestones || [],
             props: [{ prop: "name" }],
         },
@@ -2331,17 +2331,31 @@ function validateTimeline(timeline) {
 
     for (const { label, data, props } of propsToStringCheck) {
         let ord = 1;
-        for (const { prop, unique, index } of props) {
+        for (const { prop, unique, index, mutex, keys } of props) {
             for (const entry of data) {
-                if (!entry || !entry[prop]) {
-                    errors.push(`The ${toEnUsOrd(ord)} ${label} is missing a "${prop}" property.`);
+                if (prop) {
+                    if (!entry || !entry[prop]) {
+                        errors.push(
+                            `The ${toEnUsOrd(ord)} ${label} is missing a "${prop}" property.`,
+                        );
+                    }
+                    const value = entry[prop];
+                    if (unique && index && index[value]) {
+                        errors.push(`Multiple ${label}s cannot have ${prop} '${value}'.`);
+                    }
+                    if (index) {
+                        index[value] = entry;
+                    }
                 }
-                const value = entry[prop];
-                if (unique && index && index[value]) {
-                    errors.push(`Multiple ${label}s cannot have ${prop} '${value}'.`);
-                }
-                if (index) {
-                    index[value] = entry;
+                if (mutex) {
+                    const name = keys.map(key => entry[key]).find(x => x) || `<no '${key}'>`;
+                    console.log(entry);
+                    const numPresent = mutex.filter(k => entry.hasOwnProperty(k)).length;
+                    if (numPresent > 1) {
+                        errors.push(
+                            `The ${label} '${name}' can only have one of ${mutex.join(", ")}`,
+                        );
+                    }
                 }
                 ord++;
             }
@@ -2399,7 +2413,7 @@ function validateTimeline(timeline) {
 
     checkErrorsAndFail();
 
-    // very naive cycle detection (N^4) - need to consult my copy of CLRS
+    // very naive cycle detection (N^4)
     for (const task of timeline.tasks || []) {
         const stack = [[task.name, []]];
         while (stack.length > 0) {
@@ -2487,7 +2501,22 @@ async function scheduleTasks(timeline, onSolvingStart) {
         const getTaskIdx = name => tasks.findIndex(t => t.name === name);
         const noOverlap = ([start1, end1], [start2, end2]) =>
             c.Or(c.GT(start1, end2), c.GT(start2, end1));
-        const swimlaneIndex = task => timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
+        const swimlaneIndex = task => {
+            let swimlaneIdx = timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
+            let swimlane = timeline.swimlanes[swimlaneIdx];
+            let n = 5;
+            while (swimlane && swimlane.groupedWith !== undefined && n-- > 0) {
+                swimlaneIdx = timeline.swimlanes.findIndex(s => s.id === swimlane.groupedWith);
+                swimlane = timeline.swimlanes[swimlaneIdx];
+            }
+            if (!swimlane || swimlane.groupedWith !== undefined) {
+                errors.push(
+                    `Cannot find timeline: a groupedWith chain of length >= 5 was found for ${task.name}`,
+                );
+                return -1;
+            }
+            return swimlaneIdx;
+        };
 
         const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, "start")));
         const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, "end")));
