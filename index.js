@@ -30,7 +30,8 @@ const container = document.getElementById("container");
 const monacoContainer = document.getElementById("monaco-container");
 const downloadButton = document.getElementById("download-button");
 const clipboardButton = document.getElementById("clipboard-button");
-const randomizeButton = document.getElementById("randomize-button");
+const randomizeColorButton = document.getElementById("randomize-color-button");
+const randomizeFontButton = document.getElementById("randomize-font-button");
 const tabsButton = document.getElementById("tabs-button");
 const viewTab = document.getElementById("view-tab");
 const editorTab = document.getElementById("editor-tab");
@@ -83,6 +84,7 @@ let _z3 = null;
 let _debugGlobalMonacoEditor;
 let _timeline = makeSampleTimeline();
 let _fontToLoad = null;
+let _googleFontMetadata = null;
 let _lastKnownJson = null;
 let _mutated = false;
 var _randomTaskId = 1;
@@ -90,6 +92,7 @@ let _getText = null;
 let _overwriteText = null;
 let _setThemeCb = null;
 let _renderNeeded = false;
+let _firstRenderMade = false;
 let _scheduledTimeline = null;
 window._hasGfontConsent = window.localStorage.getItem(GFONT_LOCAL_STORAGE_KEY);
 let _lastSolverCacheKey = null;
@@ -97,6 +100,7 @@ let _lastSolverUsed = null;
 const _solutionCache = {};
 const _loadedGoogleFonts = [];
 const _triedFonts = new Set();
+const _failedFonts = new Set();
 const _loadedWoff2s = {};
 // https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#generic-name
 const _cssFontGenericNames = [
@@ -114,19 +118,27 @@ const _cssFontGenericNames = [
     "emoji",
     "fangsong",
 ];
+const _bannedGoogleFonts = ["Rubik Pixels"].map(f => f.toLocaleLowerCase());
 
 setupPageLeavePrompt();
 
 setupThreeStateButton(downloadButton, ["Download PNG", "...", "Download started!"], downloadPng);
 setupThreeStateButton(clipboardButton, ["Copy to Clipboard", "...", "Copied!"], copyPngToClipboard);
 setupThreeStateButton(
-    randomizeButton,
-    ["Randomize Style", "...", "Randomized!"],
-    writeRandomizedConfigToMonaco,
+    randomizeColorButton,
+    ["Colors", "...", "Done!"],
+    () => writeRandomizedConfigToMonaco({ randomizeStyle: true }),
+    false,
+);
+setupThreeStateButton(
+    randomizeFontButton,
+    ["Font", "...", "Done!"],
+    () => writeRandomizedConfigToMonaco({ randomizeFont: true }),
+    false,
 );
 setupThreeStateButton(
     fixedIntervalsButton,
-    ["Write Optimized Schedule", "...", "Written!"],
+    ["Write optimized schedule", "...", "Written!"],
     writeOptimizedScheduleToMonaco,
 );
 
@@ -556,7 +568,7 @@ function setupFourStateToggle(checkboxElt, labelElt, initialValue, labels, textC
  * @param {[string, string, string]} labels
  * @param {() => Promise} action
  */
-function setupThreeStateButton(button, labels, action) {
+function setupThreeStateButton(button, labels, action, longTimeouts = true) {
     labels = labels.slice();
     const originalColor = button.style.color;
     const originalTextDecoration = button.style.textDecoration;
@@ -577,9 +589,11 @@ function setupThreeStateButton(button, labels, action) {
         e.preventDefault();
         setText(1);
         await action();
-        await sleep(120);
+        if (longTimeouts) {
+            await sleep(120);
+        }
         setText(2);
-        setTimeout(() => setText(0), 700);
+        setTimeout(() => setText(0), longTimeouts ? 1000 : 200);
     };
     setText(0);
 }
@@ -657,33 +671,22 @@ async function sleep(ms) {
 }
 
 /**
- * @param {() => boolean} action
- * @param {number} timeoutMs
+ * @param {Function} fn 
+ * @param {number} maxTimeMs 
+ * @returns {boolean} Whether the fn returned true before maxTimeMs.
  */
-function pollWithTimeout(action, timeoutMs) {
-    const start = new Date();
-    return new Promise((resolve, reject) => {
-        function checkAction() {
-            let result = false;
-            try {
-                result = action();
-            } catch (err) {
-                console.warn("Got error while polling", err);
-            }
-
-            if (result) {
-                resolve();
-                return;
-            }
-
-            if (new Date() - start > timeoutMs) {
-                reject(new Error("Timed out"));
-            }
-
-            setTimeout(checkAction, 250);
+async function pollSane(fn, maxTimeMs) {
+    let currTimeMs = 5;
+    let done = false;
+    const endPromise = sleep(maxTimeMs).then(() => { done = true; });
+    while (!fn()) {
+        await Promise.any([endPromise, sleep(currTimeMs)]);
+        currTimeMs = currTimeMs * 3 / 2;
+        if (done) {
+            return false;
         }
-        setTimeout(checkAction, 0);
-    });
+    }
+    return true;
 }
 
 // https://stackoverflow.com/a/18650249
@@ -695,14 +698,50 @@ function blobToBase64(blob) {
     });
 }
 
+/** @param {string} str */
+function trimQuotes(str) {
+    if (str && str.startsWith('"')) {
+            return str.slice(1, -1);
+    }
+    return str;
+}
+
+/**
+ * Determines whehther a font has loaded in the browser and
+ * is ready for use and *measurement*.
+ * See https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/check
+ * @param {string} font 
+ * @returns Whether the font is loaded.
+ */
+function checkFont(font) {
+    return document.fonts.check("12px " + font);
+}
+
 // https://stackoverflow.com/a/35373030
 const measureText = (() => {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
 
+    const cache = {};
+
+    /**
+     * @param {string} text
+     * @param {string} fontSize
+     * @param {string} font
+     */
     return function measureText(text, fontSize, font) {
+        const fontNameRaw = trimQuotes(font);
+        const key = `${text} ${fontSize} ${fontNameRaw}`;
+        if (cache[key] && false) {
+            return cache[key];
+        }
+
         context.font = fontSize + "px " + font;
-        return context.measureText(text).width;
+        const size = context.measureText(text).width;
+        if (_loadedGoogleFonts.includes(fontNameRaw)) {
+            cache[key] = size;
+        }
+        return size
     };
 })();
 
@@ -804,6 +843,13 @@ function addStylesheetWithUrl(url, fontName) {
     document.getElementsByTagName("head")[0].appendChild(link);
 }
 
+/** @param {string} woff2 */
+function addWoff2GloballyToDoc(woff2) {
+    const link = document.createElement("style");
+    link.textContent = woff2;
+    document.getElementsByTagName("head")[0].appendChild(link);
+}
+
 /** @param {string} fontName */
 function getGFontConsent(fontName) {
     if (window._hasGfontConsent === null) {
@@ -841,6 +887,11 @@ async function loadGoogleFont() {
 
     const url = `https://fonts.googleapis.com/css2?family=${fontName}`;
     try {
+        if (_bannedGoogleFonts.includes(fontName.toLocaleLowerCase())) {
+            console.warn(`Font '${fontName}' is banned.`, response.status);
+            return;
+        }
+
         const response = await fetch(url);
         if (response.status < 200 || response.status >= 400) {
             console.warn(`Font '${fontName}' does not exist`, response.status);
@@ -853,13 +904,7 @@ async function loadGoogleFont() {
                 text
                     .split("\n")
                     .map(t => t.split(" src: url(")[1])
-                    .filter(
-                        url =>
-                            url &&
-                            url.startsWith &&
-                            url.startsWith("https://") &&
-                            url.endsWith(") format('woff2');"),
-                    )
+                    .filter(u => u && u.startsWith("https://fonts.gstatic.com") && u.endsWith(") format('woff2');"))
                     .map(raw => ({
                         url: raw.split(") format('woff2');")[0],
                         original: raw,
@@ -877,16 +922,28 @@ async function loadGoogleFont() {
                 }
             }
 
+            // so the text-measuring canvas has access to them
+            addWoff2GloballyToDoc(text, fontName);
+            
+            measureText("_loadedWoff2s", 12, fontName);
             _loadedWoff2s[fontName] = text;
+            log(`Font '${fontName}' has been downloaded. Waiting for it to load in browser... (max 5s)`);
+            if (!await pollSane(() => checkFont(fontName), 5000)) {
+                throw new Error("Failed to load font in browser.");
+            }
+
             if (!_loadedGoogleFonts.includes(fontName)) {
                 _loadedGoogleFonts.push(fontName);
             }
+            log(`'${fontName}' loaded in browser.`);
         } catch (e) {
+            _failedFonts.add(fontName);
             console.warn("Caught exception parsing woff2", fontName, e);
             // swallow because we can still render in browser
             addStylesheetWithUrl(url, fontName);
         }
     } catch (e) {
+        _failedFonts.add(fontName);
         console.warn("Caught exception loading font", fontName, e);
         return;
     }
@@ -906,7 +963,17 @@ function initializeGoogleFontsWorker() {
         await loadGoogleFont(_fontToLoad);
         window.setTimeout(tryLoadFont, 1000);
     }
+    async function tryLoadGoogleFontList() {
+        try {
+            _googleFontMetadata = (
+                await fetch("google-font-families.json").then(r => r.json())
+            ).filter(font => !_bannedGoogleFonts.includes(font.name.toLocaleLowerCase()));
+        } catch (err) {
+            console.warn("Couldn't load Google fonts list for randomization.", err);
+        }
+    }
     window.setTimeout(tryLoadFont, 0);
+    window.setTimeout(tryLoadGoogleFontList, 0);
 }
 
 /** @param {string} json */
@@ -1152,6 +1219,14 @@ function randRange(lo, hiExcl) {
     return Math.floor(Math.random() * (hiExcl - lo) + lo);
 }
 
+function modulo(n, m) {
+    let r = n % m;
+    if (r < 0) {
+        r += m;
+    }
+    return r;
+}
+
 /** @param {number[]} arr */
 function sum(arr) {
     let ans = 0;
@@ -1360,8 +1435,16 @@ function renderTimeline(rawTimeline) {
 
     if (googleFont !== null) {
         triggerLoadGoogleFont(googleFont);
-        font = googleFont;
+        if (_loadedGoogleFonts.includes(googleFont)) {
+            font = googleFont;
+        }
+        else if (_firstRenderMade && !_failedFonts.has(googleFont)) {
+            // don't render if we don't have the font and we haven't tried yet
+            // avoids visual issues associated with font swapping
+            return null;
+        }
     }
+    
     const woff2Stylesheet = googleFont ? _loadedWoff2s[googleFont] : null;
 
     if (font === null) {
@@ -2328,6 +2411,11 @@ function validateTimeline(timeline) {
         }
     };
 
+    const googleFont = timeline?.config?.googleFont;
+    if (googleFont && _bannedGoogleFonts.includes(googleFont.toLocaleLowerCase())) {
+        errors.push(`The font ${googleFont} causes problems on my machine so I have disabled it.`);
+    }
+
     const taskNames = {};
     const swimlaneIds = {};
 
@@ -2759,6 +2847,11 @@ async function flushTimeline() {
 
         notifyRendering();
         const svg = renderTimeline(_scheduledTimeline);
+        if (!svg) {
+            _renderNeeded = true;
+            return;
+        }
+        _firstRenderMade = true;
         clearChildren(container);
         container.append(svg);
         notifyRendered();
@@ -2785,30 +2878,99 @@ function setupPageLeavePrompt() {
     };
 }
 
-function writeRandomizedConfigToMonaco() {
+function writeRandomizedConfigToMonaco({ randomizeStyle, randomizeFont }) {
     if (_overwriteText !== null && _scheduledTimeline !== null) {
         const makeHsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
+
+        // No idea about color theory
+        const hueVar = name => randRange(0, 359);
+        const satVar = name => randRange(0, 100);
+        const lumVar = name => randRange(0, 100);
+        const randomHsl = () => [hueVar(), satVar(), lumVar()];
+
+        const contrastingSL = (s1, l1) => {
+            const l2 = randChoice(
+                [
+                    l1 >= 30 ? randRange(0, l1 * 0.7 + 1) : null,
+                    l1 <= 70 ? randRange(l1 * 1.2, 101) : null,
+                ].filter(a => a !== null),
+            );
+            // more luminance => more saturated
+            const s2 =
+                l2 > l1
+                    ? Math.min(100, randRange(s1 + 10, s1 + 30))
+                    : Math.max(
+                          0,
+                          randRange(Math.min(s1 * 0.5, s1 - 30), Math.min(s1 * 0.75, s1 - 10)),
+                      );
+            return [s2, l2];
+        };
+
         const colorOptions = {
             oneColor() {
-                const h = randRange(0, 360);
-                const s = randRange(0, 101);
-                const l1 = randRange(0, 101);
-                const l2 = randChoice(
-                    [
-                        l1 >= 30 ? randRange(0, l1 * 0.7 + 1) : null,
-                        l1 <= 70 ? randRange(l1 * 1.2, 101) : null,
-                    ].filter(a => a !== null),
-                );
+                const [h, s, l1] = randomHsl();
+                const [_, l2] = contrastingSL(s, l1);
 
                 return [
+                    { path: ["palette", "outlines"], value: null },
                     { path: ["palette", "gradient"], value: [makeHsl(h, s, l1)] },
                     { path: ["palette", "backgroundColor"], value: makeHsl(h, s, l2) },
                 ];
             },
+            oneColorVarySaturation() {
+                const [h, s, l1] = randomHsl();
+                const [s2, l2] = contrastingSL(s, l1);
+
+                return [
+                    { path: ["palette", "outlines"], value: null },
+                    { path: ["palette", "gradient"], value: [makeHsl(h, s, l1)] },
+                    { path: ["palette", "backgroundColor"], value: makeHsl(h, s2, l2) },
+                ];
+            },
+            twoColors() {
+                const [h1, s1, l1] = randomHsl();
+                const h2 = randChoice([h1 + 120, h1 - 120, h1 + 180].map(x => modulo(x, 360)));
+                const [s2, l2] = contrastingSL(s1, l1);
+
+                return [
+                    { path: ["palette", "outlines"], value: null },
+                    { path: ["palette", "gradient"], value: [makeHsl(h1, s1, l1)] },
+                    { path: ["palette", "backgroundColor"], value: makeHsl(h2, s2, l2) },
+                ];
+            },
+            twoColorsCartoonOutlines() {
+                return colorOptions.twoColors().concat([
+                    {
+                        path: ["palette", "outlines"],
+                        value: { thresholdL1: 1000000, strength: 1 },
+                    },
+                ]);
+            },
+        };
+        const fontOptions = {
+            randomFont() {
+                if (_googleFontMetadata === null) {
+                    // no edits
+                    return [];
+                }
+
+                const font = randChoice(_googleFontMetadata);
+                return [
+                    { path: ["font"], value: null },
+                    { path: ["googleFont"], value: font.name },
+                ];
+            },
         };
 
-        const editFn = randChoice([colorOptions.oneColor]);
-        const edits = editFn();
+        const colorEditFn = randChoice(Object.values(colorOptions));
+        const fontEditFn = randChoice(Object.values(fontOptions));
+        const edits = [];
+        if (randomizeFont) {
+            edits.push(...fontEditFn());
+        }
+        if (randomizeStyle) {
+            edits.push(...colorEditFn());
+        }
 
         const text = _getText();
         const timelineToWrite = JSON.parse(text);
@@ -2817,7 +2979,11 @@ function writeRandomizedConfigToMonaco() {
             const objToMutate = path
                 .slice(0, -1)
                 .reduce((obj, p) => obj[p] || {}, timelineToWrite.config || {});
-            objToMutate[path[path.length - 1]] = value;
+            if (!value) {
+                delete objToMutate[path[path.length - 1]];
+            } else {
+                objToMutate[path[path.length - 1]] = value;
+            }
         }
 
         const timelineJson = stringifyJson(timelineToWrite);
@@ -2854,7 +3020,7 @@ function log(...args) {
     console.log(...args);
 }
 
-async function main() {
+function main() {
     log("running script");
 
     const [exists, storedJson] = readFromLocalStorage();
