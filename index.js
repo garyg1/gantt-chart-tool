@@ -1360,9 +1360,14 @@ function renderTimeline(rawTimeline) {
             }))
             .map(m => {
                 const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
-                const deps = m.deps
+                const taskDeps = m.deps
                     .map(depName => scheduledTasks.find(t => t.name === depName))
                     .filter(t => !!t);
+                const swimlaneDeps = m.deps
+                    .map(depName => rawTimeline.swimlanes.find(s => s.id === depName))
+                    .filter(s => !!s)
+                    .flatMap(s => scheduledTasks.filter(t => t.swimlaneId === s.id));
+                const deps = taskDeps.concat(swimlaneDeps);
                 const milestoneTime = deps
                     .map(t => t.interval.end)
                     .reduce((max, end) => (end > max ? end : max), minTaskDate);

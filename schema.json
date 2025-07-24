@@ -243,7 +243,7 @@
                     },
                     "deps": {
                         "type": "array",
-                        "description": "A list of task names that must be executed before this milestone. Milestones can currently only depend on tasks (not other milestones).",
+                        "description": "A list of task names or swimlane ids that must be executed before this milestone. Milestones can currently only depend on tasks or swimlanes (not other milestones).",
                         "items": { "type": "string" }
                     },
                     "color": {
@@ -297,7 +297,7 @@
                     },
                     "deps": {
                         "type": "array",
-                        "description": "A list of task names that must be executed before this task.",
+                        "description": "A list of task names or swimlane ids that must be executed before this task.",
                         "items": { "type": "string" }
                     },
                     "color": {

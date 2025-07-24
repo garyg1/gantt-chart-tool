@@ -20,7 +20,7 @@
         { "name": "Milestone 1", "interval": { "exactly": "2025-07-24" } },
         {
             "name": "Milestone 2",
-            "deps": ["Task 1", "Task 2", "Task 3", "Task 4"]
+            "deps": ["2", "4", "5", "Task 1"]
         }
     ],
     "tasks": [
