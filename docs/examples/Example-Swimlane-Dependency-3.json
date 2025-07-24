@@ -1,0 +1,142 @@
+{
+    "title": "Project A",
+    "config": {
+        "width": 700,
+        "font": "sans-serif",
+        "palette": {
+            "gradient": ["#3c5ca2", "seagreen", "#eee"],
+            "backgroundColor": "white"
+        },
+        "showDeps": true
+    },
+    "swimlanes": [
+        { "id": "1", "name": "A", "maxParallelism": 3 },
+        { "id": "2", "name": "B", "maxParallelism": 2 },
+        { "id": "3", "name": "C", "maxParallelism": 1, "hidden": false },
+        { "id": "4", "name": "D", "groupedWith": "3" },
+        { "id": "5", "name": "E", "maxParallelism": 2 }
+    ],
+    "milestones": [
+        { "name": "Milestone 1", "interval": { "exactly": "2025-07-24" } },
+        {
+            "name": "Milestone 2",
+            "deps": ["2", "4", "5", "Task 1"]
+        }
+    ],
+    "tasks": [
+        {
+            "name": "Task 1",
+            "swimlaneId": "1",
+            "duration": "P22D",
+            "deps": [],
+            "completed": true,
+            "importance": 2
+        },
+        {
+            "name": "Task 2",
+            "swimlaneId": "1",
+            "duration": "P11D",
+            "deps": ["3"],
+            "width": 1
+        },
+        {
+            "name": "Task 3",
+            "swimlaneId": "1",
+            "duration": "P11D",
+            "deps": ["Task 2"]
+        },
+        {
+            "name": "Task 4",
+            "swimlaneId": "2",
+            "duration": "P12D",
+            "deps": ["Task 3"]
+        },
+        {
+            "name": "Task 5",
+            "swimlaneId": "1",
+            "duration": "P12D",
+            "deps": [],
+            "width": 1,
+            "completed": true,
+            "importance": 2
+        },
+        {
+            "name": "Task 6",
+            "swimlaneId": "2",
+            "duration": "P19D",
+            "deps": ["Task 5"]
+        },
+        {
+            "name": "Task 7",
+            "swimlaneId": "3",
+            "duration": "P19D",
+            "deps": ["Task 6"]
+        },
+        {
+            "name": "Task 8",
+            "swimlaneId": "4",
+            "duration": "P13D",
+            "deps": ["Task 7"]
+        },
+        {
+            "name": "Task 9",
+            "swimlaneId": "5",
+            "duration": "P18D",
+            "deps": ["Task 8"],
+            "width": 1
+        },
+        {
+            "name": "Task 10",
+            "swimlaneId": "4",
+            "duration": "P2W",
+            "deps": ["Task 9"]
+        },
+        {
+            "name": "Task 11",
+            "swimlaneId": "2",
+            "duration": "P12D",
+            "deps": ["Task 9", "Task 10"]
+        },
+        {
+            "name": "Task 12",
+            "swimlaneId": "2",
+            "duration": "P18D",
+            "deps": []
+        },
+        {
+            "name": "Task 13",
+            "swimlaneId": "2",
+            "duration": "P12D",
+            "deps": []
+        },
+        {
+            "name": "Task 14",
+            "swimlaneId": "1",
+            "duration": "P17D",
+            "deps": ["Task 12"]
+        },
+        {
+            "name": "Task 15",
+            "swimlaneId": "3",
+            "duration": "P17D",
+            "deps": ["Task 14"],
+            "width": 1
+        },
+        {
+            "name": "Task 16",
+            "swimlaneId": "3",
+            "duration": "P10D",
+            "deps": ["Task 5", "Task 14"]
+        },
+        {
+            "name": "Fixed Task A",
+            "swimlaneId": "1",
+            "interval": { "start": "2025-10-05", "end": "2025-11-06" }
+        },
+        {
+            "name": "Fixed Task B",
+            "swimlaneId": "2",
+            "interval": { "start": "2025-10-08", "end": "2025-10-30" }
+        }
+    ]
+}

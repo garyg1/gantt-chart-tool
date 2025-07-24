@@ -951,6 +951,14 @@ function addDays(date, days) {
     return ret;
 }
 
+/** @param {number} hours */
+function addHours(date, hours) {
+    const ret = new Date(date);
+    const ms = hours * 60 * 60 * 1000;
+    ret.setTime(ret.getTime() + ms);
+    return ret;
+}
+
 /**
  * @param {Date} date1
  * @param {Date} date2
@@ -969,6 +977,9 @@ function getDateRangeText(start, end) {
         day: "numeric",
         timeZone: "UTC",
     });
+    if (end > start) {
+        end = addDays(end, -1);
+    }
     const endText = end.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -1177,6 +1188,17 @@ function uniq(arr) {
     return [...new Set(arr)];
 }
 
+function groupBy(arr, fn) {
+    const result = {};
+    for (const elt of arr) {
+        const key = fn(elt);
+        const group = result[key] || [];
+        group.push(elt);
+        result[key] = group;
+    }
+    return result;
+}
+
 /**
  * @param {typeof _timeline} timeline
  */
@@ -1192,6 +1214,33 @@ function assertTimelineValid(timeline) {
             );
         }
     }
+}
+
+function getSwimlaneIdToCanonicalIdx(timeline, errors = []) {
+    const swimlaneIdToCanonicalIdx = {};
+    for (let i = 0; i < timeline.swimlanes.length; i++) {
+        let swimlaneIdx = i;
+        let swimlane = timeline.swimlanes[swimlaneIdx];
+        const originalId = swimlane.id;
+        let n = 5;
+        while (swimlane && swimlane.groupedWith !== undefined && n-- > 0) {
+            swimlaneIdx = timeline.swimlanes.findIndex(s => s.id === swimlane.groupedWith);
+            swimlane = timeline.swimlanes[swimlaneIdx];
+        }
+
+        if (!swimlane) {
+            errors.push(`Cannot find swimlane for '${timeline.swimlanes[i]?.id}'`);
+            swimlaneIdx = -1;
+        } else if (swimlane.groupedWith !== undefined) {
+            errors.push(
+                `Cannot find swimlane: a groupedWith chain of length >= 5 was found for '${swimlane.id}'`,
+            );
+            swimlaneIdx = -1;
+        }
+
+        swimlaneIdToCanonicalIdx[originalId] = swimlaneIdx;
+    }
+    return swimlaneIdToCanonicalIdx;
 }
 
 // Approach discussed https://groups.google.com/g/d3-js/c/oVbg5HkAoH4?pli=1
@@ -1253,6 +1302,7 @@ function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
 function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
 
+    const shouldDrawGap = rawTimeline.config?.showDeps || rawTimeline.config?.showCriticalPaths;
     const scheduledTasks = rawTimeline.tasks
         .filter(t =>
             (rawTimeline.swimlanes || [])
@@ -1264,6 +1314,8 @@ function renderTimeline(rawTimeline) {
             interval: {
                 start: new Date(t.interval.start),
                 end: new Date(t.interval.end),
+                drawnStart: addHours(new Date(t.interval.start), 0),
+                drawnEnd: addHours(new Date(t.interval.end), shouldDrawGap ? -6 : 0),
             },
             offset: { center: 0, start: 0, end: 0 },
             _type: "task",
@@ -1308,9 +1360,14 @@ function renderTimeline(rawTimeline) {
             }))
             .map(m => {
                 const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
-                const deps = m.deps
+                const taskDeps = m.deps
                     .map(depName => scheduledTasks.find(t => t.name === depName))
                     .filter(t => !!t);
+                const swimlaneDeps = m.deps
+                    .map(depName => rawTimeline.swimlanes.find(s => s.id === depName))
+                    .filter(s => !!s)
+                    .flatMap(s => scheduledTasks.filter(t => t.swimlaneId === s.id));
+                const deps = taskDeps.concat(swimlaneDeps);
                 const milestoneTime = deps
                     .map(t => t.interval.end)
                     .reduce((max, end) => (end > max ? end : max), minTaskDate);
@@ -1318,8 +1375,10 @@ function renderTimeline(rawTimeline) {
                 return {
                     ...m,
                     interval: {
-                        start: exactly ?? addDays(milestoneTime, 1),
-                        end: exactly ?? addDays(milestoneTime, 1),
+                        start: exactly ?? milestoneTime,
+                        end: exactly ?? milestoneTime,
+                        drawnStart: exactly ?? milestoneTime,
+                        drawnEnd: exactly ?? milestoneTime,
                     },
                     offset: {
                         start: milestoneRadius - 1,
@@ -1712,9 +1771,9 @@ function renderTimeline(rawTimeline) {
                     .append("linearGradient")
                     .attr("id", gradientId)
                     .attr("gradientUnits", "userSpaceOnUse")
-                    .attr("x1", dateScale(d0.interval.end) + d0.offset.center)
+                    .attr("x1", dateScale(d0.interval.drawnEnd) + d0.offset.center)
                     .attr("y1", getTaskYForDep(d0))
-                    .attr("x2", dateScale(d1.interval.start) - d1.offset.center)
+                    .attr("x2", dateScale(d1.interval.drawnStart) - d1.offset.center)
                     .attr("y2", getTaskYForDep(d1));
                 const startColor = getStrokeHexForTask(d0) ?? getTaskFill(d0);
                 const endColor = getStrokeHexForTask(d1) ?? getTaskFill(d1);
@@ -1736,34 +1795,39 @@ function renderTimeline(rawTimeline) {
         const allTasks = perSwimlaneTasks.flatMap(p => p.tasks);
         const allMilestones = perSwimlaneTasks.flatMap(p => p.milestones);
         const deps = [];
+
+        const addDep = (depName, taskOrMilestone) => {
+            const dep = allTasks.find(t => t.name === depName);
+            const swimlane = timeline.swimlanes.find(t => t.id === depName);
+            if (dep) {
+                deps.push([dep, taskOrMilestone]);
+            } else if (swimlane) {
+                const swimlaneTask = allTasks
+                    .filter(t => t.swimlaneId === swimlane.id)
+                    .reduce((max, task) => (max.interval.end > task.interval.end ? max : task));
+                deps.push([swimlaneTask, taskOrMilestone]);
+            } else {
+                log("Can't find dependency?", taskOrMilestone, allTasks);
+            }
+        };
         for (const task of allTasks) {
             for (const depName of task.deps || []) {
-                const dep = allTasks.find(t => t.name === depName);
-                if (!dep) {
-                    log("Can't find dependency?", task, allTasks);
-                    continue;
-                }
-                deps.push([dep, task]);
+                addDep(depName, task);
             }
         }
         for (const milestone of allMilestones) {
             for (const depName of milestone.deps) {
-                const dep = allTasks.find(t => t.name === depName);
-                if (!dep) {
-                    log("Can't find dependency?", milestone, allTasks);
-                    continue;
-                }
-                deps.push([dep, milestone]);
+                addDep(depName, milestone);
             }
         }
 
         const getX = d => ({
             x1:
-                dateScale(d[0].interval.end) +
+                dateScale(d[0].interval.drawnEnd) +
                 d[0].offset.center -
                 (getStrokeHexForTask(d[0]) ? 0.5 : 1),
             x2:
-                dateScale(d[1].interval.start) -
+                dateScale(d[1].interval.drawnStart) -
                 d[1].offset.center +
                 (getStrokeHexForTask(d[1]) ? 0.5 : 1),
         });
@@ -1790,9 +1854,12 @@ function renderTimeline(rawTimeline) {
                     d.strokeHex = getStrokeHexForTask(d);
                     return d;
                 })
-                .attr("x", d => dateScale(d.interval.start))
+                .attr("x", d => dateScale(d.interval.drawnStart))
                 .attr("y", getTaskY)
-                .attr("width", d => dateScale(d.interval.end) - dateScale(d.interval.start))
+                .attr(
+                    "width",
+                    d => dateScale(d.interval.drawnEnd) - dateScale(d.interval.drawnStart),
+                )
                 .attr("height", d => taskHeight - (d.strokeHex ? 0.5 : 0))
                 .attr("fill", d => {
                     const fillColor = getTaskFill(d);
@@ -1899,7 +1966,7 @@ function renderTimeline(rawTimeline) {
             .enter()
             .append("text")
             .attr("font-size", completedEmojiFontSize)
-            .attr("x", d => dateScale(d.interval.end))
+            .attr("x", d => dateScale(d.interval.drawnEnd))
             .attr("y", getTaskY)
             .attr("dx", d =>
                 d._type === "task" ? -completedTaskPadding - emojiSize : -emojiSize / 2,
@@ -2279,7 +2346,7 @@ function getCacheKey(tasks, swimlanes) {
     const taskKeys = tasks.map(task => {
         return {
             name: taskNameToIdx[task.name],
-            deps: (task.deps || []).map(d => taskNameToIdx[d]).sort(),
+            deps: (task.deps || []).map(d => taskNameToIdx[d] || swimlaneNameToIdx[d]).sort(),
             fixedStartDateDays: task.fixedStartDateDays,
             fixedEndDateDays: task.fixedEndDateDays,
             durationDays: task.durationDays,
@@ -2375,7 +2442,6 @@ function validateTimeline(timeline) {
                 }
                 if (mutex) {
                     const name = keys.map(key => entry[key]).find(x => x) || `<no '${key}'>`;
-                    console.log(entry);
                     const numPresent = mutex.filter(k => entry.hasOwnProperty(k)).length;
                     if (numPresent > 1) {
                         errors.push(
@@ -2388,6 +2454,7 @@ function validateTimeline(timeline) {
         }
     }
 
+    getSwimlaneIdToCanonicalIdx(timeline, errors);
     checkErrorsAndFail();
 
     const dependenciesToValidate = [
@@ -2404,13 +2471,21 @@ function validateTimeline(timeline) {
                 if (!Array.isArray(taskOrMilestone.deps)) {
                     errors.push(`"deps" array is invalid for ${taskOrMilestone.name}.`);
                 } else {
-                    const notFoundDeps = taskOrMilestone.deps.filter(d => !taskNames[d]);
+                    const notFoundDeps = taskOrMilestone.deps.filter(
+                        d => !taskNames[d] && !swimlaneIds[d],
+                    );
                     for (const d of notFoundDeps) {
                         errors.push(`Can't find dependency: ${d} for ${taskOrMilestone.name}.`);
                     }
 
                     if (taskOrMilestone.deps.some(d => d === taskOrMilestone.name)) {
                         errors.push(`${label} ${taskOrMilestone.name} can't depend on itself.`);
+                    }
+
+                    if (taskOrMilestone.deps.some(d => d === taskOrMilestone.swimlaneId)) {
+                        errors.push(
+                            `${label} ${taskOrMilestone.name} can't depend on its own swimlane.`,
+                        );
                     }
                 }
             }
@@ -2445,7 +2520,15 @@ function validateTimeline(timeline) {
         while (stack.length > 0) {
             const [curr, currBackEdges] = stack.pop();
             const currTask = taskNames[curr];
-            for (const dep of currTask.deps || []) {
+            let deps;
+            if (currTask) {
+                deps = currTask.deps;
+            } else {
+                const tasks = timeline.tasks.filter(t => t.swimlaneId === curr);
+                deps = tasks.map(t => t.name);
+            }
+
+            for (const dep of deps || []) {
                 const cycleIdx = currBackEdges.indexOf(dep);
                 if (cycleIdx !== -1) {
                     errors.push(
@@ -2517,6 +2600,11 @@ async function scheduleTasks(timeline, onSolvingStart) {
         const sumDays = c.Int.const("sumDays");
 
         const errors = [];
+        const checkErrors = () => {
+            if (errors.length > 0) {
+                throw new Error(errors.join("\n"));
+            }
+        };
 
         // these are evaluated lexicographically
         // https://microsoft.github.io/z3guide/docs/optimization/combiningobjectives
@@ -2526,23 +2614,14 @@ async function scheduleTasks(timeline, onSolvingStart) {
         const makeVar = (...args) => args.join("_");
         const getTaskIdx = name => tasks.findIndex(t => t.name === name);
         const noOverlap = ([start1, end1], [start2, end2]) =>
-            c.Or(c.GT(start1, end2), c.GT(start2, end1));
-        const swimlaneIndex = task => {
-            let swimlaneIdx = timeline.swimlanes.findIndex(s => s.id === task.swimlaneId);
-            let swimlane = timeline.swimlanes[swimlaneIdx];
-            let n = 5;
-            while (swimlane && swimlane.groupedWith !== undefined && n-- > 0) {
-                swimlaneIdx = timeline.swimlanes.findIndex(s => s.id === swimlane.groupedWith);
-                swimlane = timeline.swimlanes[swimlaneIdx];
-            }
-            if (!swimlane || swimlane.groupedWith !== undefined) {
-                errors.push(
-                    `Cannot find timeline: a groupedWith chain of length >= 5 was found for ${task.name}`,
-                );
-                return -1;
-            }
-            return swimlaneIdx;
-        };
+            c.Or(c.GE(start1, end2), c.GE(start2, end1));
+
+        const getSwimlaneIdx = task => getSwimlaneIdx1(task.swimlaneId);
+        const getSwimlaneIdx1 = swimlaneId => swimlaneIdToCanonicalIdx[swimlaneId];
+        const swimlaneIdToCanonicalIdx = getSwimlaneIdToCanonicalIdx(timeline, errors);
+        const swimlaneIdToTasks = groupBy(timeline.tasks, task => task.swimlaneId);
+
+        checkErrors();
 
         const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, "start")));
         const ti_end = tasks.map((task, i) => c.Int.const(makeVar(task, i, "end")));
@@ -2573,14 +2652,26 @@ async function scheduleTasks(timeline, onSolvingStart) {
 
             for (const d of task.deps || []) {
                 const j = getTaskIdx(d);
-                if (j === -1) {
+                if (j !== -1) {
+                    solver.add(c.GE(ti_start[i], ti_end[j]));
+                } else if (swimlaneIdToTasks[d]) {
+                    const depTasks = swimlaneIdToTasks[d];
+                    for (const depTask of depTasks) {
+                        const j = getTaskIdx(depTask.name);
+                        if (j === -1) {
+                            errors.push(
+                                `Can't find task '${depTask.name}' of swimlane dependency '${d}'`,
+                            );
+                            continue;
+                        }
+                        solver.add(c.GE(ti_start[i], ti_end[j]));
+                    }
+                } else {
                     errors.push(`Can't find dependency: ${d} for ${task.name}`);
-                    continue;
                 }
-                solver.add(c.GT(ti_start[i], ti_end[j]));
             }
 
-            const s = swimlaneIndex(task);
+            const s = getSwimlaneIdx(task);
             if (s === -1) {
                 errors.push(
                     `Can't find swimlane ${task.swimlaneId || "<not provided>"} for task ${task.name}`,
@@ -2611,7 +2702,7 @@ async function scheduleTasks(timeline, onSolvingStart) {
         solver.add(c.Eq(c.Sum(...ti_end_wbias), sumDays));
 
         for (let s = 0; s < til_present.length; s++) {
-            const sTasks = tasks.filter(task => swimlaneIndex(task) == s);
+            const sTasks = tasks.filter(task => getSwimlaneIdx(task) == s);
             for (const t1 of sTasks) {
                 for (const t2 of sTasks) {
                     if (t1.globalIndex === t2.globalIndex) {
@@ -2639,9 +2730,7 @@ async function scheduleTasks(timeline, onSolvingStart) {
             }
         }
 
-        if (errors.length > 0) {
-            throw new Error(errors.join("\n"));
-        }
+        checkErrors();
 
         return [solver, ti_start, ti_end];
     }
@@ -2680,7 +2769,7 @@ async function scheduleTasks(timeline, onSolvingStart) {
 
             log(result, logTime());
             if (result == "unsat") {
-                return null;
+                throw new Error("Unsatisfiable constraints");
             }
 
             const model = solver.model();
