@@ -1188,6 +1188,17 @@ function uniq(arr) {
     return [...new Set(arr)];
 }
 
+function groupBy(arr, fn) {
+    const result = {};
+    for (const elt of arr) {
+        const key = fn(elt);
+        const group = result[key] || [];
+        group.push(elt);
+        result[key] = group;
+    }
+    return result;
+}
+
 /**
  * @param {typeof _timeline} timeline
  */
@@ -2438,23 +2449,7 @@ function validateTimeline(timeline) {
         }
     }
 
-    const getSwimlaneIdx = task => swimlaneIdToCanonicalIdx[task.swimlaneId];
-    const swimlaneTasks = {};
-    const swimlaneIdToCanonicalIdx = getSwimlaneIdToCanonicalIdx(timeline, errors);
-    checkErrorsAndFail();
-
-    for (const task of timeline.tasks) {
-        const canonicalId = timeline.swimlanes[getSwimlaneIdx(task)]?.id;
-        if (canonicalId === undefined) {
-            errors.push(
-                `Can't find swimlane ${task.swimlaneId || "<not provided>"} for task ${task.name}.`,
-            );
-        }
-
-        const tasks = swimlaneTasks[canonicalId] || [];
-        tasks.push(task);
-        swimlaneTasks[canonicalId] = tasks;
-    }
+    getSwimlaneIdToCanonicalIdx(timeline, errors);
     checkErrorsAndFail();
 
     const dependenciesToValidate = [
@@ -2619,14 +2614,8 @@ async function scheduleTasks(timeline, onSolvingStart) {
         const getSwimlaneIdx = task => getSwimlaneIdx1(task.swimlaneId);
         const getSwimlaneIdx1 = swimlaneId => swimlaneIdToCanonicalIdx[swimlaneId];
         const swimlaneIdToCanonicalIdx = getSwimlaneIdToCanonicalIdx(timeline, errors);
-        checkErrors();
+        const swimlaneIdToTasks = groupBy(timeline.tasks, task => task.swimlaneId);
 
-        const swimlaneIdToTasks = {};
-        for (const task of timeline.tasks) {
-            const tasks = swimlaneIdToTasks[task.swimlaneId] || [];
-            tasks.push(task);
-            swimlaneIdToTasks[task.swimlaneId] = tasks;
-        }
         checkErrors();
 
         const ti_start = tasks.map((task, i) => c.Int.const(makeVar(task, i, "start")));
