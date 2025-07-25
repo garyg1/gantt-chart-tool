@@ -39,7 +39,8 @@ const statusField = document.getElementById("status-field");
 const localStorageCheckbox = document.getElementById("localstorage-checkbox");
 const localStorageCheckboxLabel = document.getElementById("localstorage-checkbox-label");
 const localStorageCheckboxClickArea = document.getElementById("localstorage-checkbox-clickarea");
-
+/** @type {HTMLLinkElement} */
+const emailMeLink = document.getElementById("email-me-link");
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
 const DEFAULT_WIDTH = 800;
@@ -166,6 +167,26 @@ const isLocalStorageEnabled = setupFourStateToggle(
 
 function stringifyJson(object) {
     return prettifyJson(object, 4, 75);
+}
+
+function humorouslyObfuscateString(str, n, k, invert) {
+    function mod(x, n) {
+        return ((x % n) + n) % n;
+    }
+
+    const out = [...Array(n)];
+    const start = mod(k, n);
+    let e = start;
+    let idx = 0;
+    do {
+        if (invert) {
+            out[e - 1] = str[idx++];
+        } else {
+            out[idx++] = str[e - 1];
+        }
+        e = mod(e * k, n);
+    } while (e != start);
+    return out.join("");
 }
 
 /**
@@ -1297,7 +1318,7 @@ function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
     }
 }
 
-function preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawCompleted, shouldDrawGap}) {
+function preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawCompleted, shouldDrawGap }) {
     const parsedTasks = rawTimeline.tasks
         .map(t => ({
             ...t,
@@ -1359,8 +1380,8 @@ function preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawCompleted,
             rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)),
         )
         .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
-    
-        if (minTaskDate > maxTaskDate) {
+
+    if (minTaskDate > maxTaskDate) {
         maxTaskDate = addDays(minTaskDate, 1);
     }
 
@@ -1429,7 +1450,11 @@ function renderTimeline(rawTimeline) {
     const shouldDrawCompleted = parseBoolOrDefault(rawTimeline.config?.showCompletedTasks, true);
     const milestoneRadius = taskHeight / 2;
 
-    const { timeline, minTaskDate, maxTaskDate } = preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawGap, shouldDrawCompleted });
+    const { timeline, minTaskDate, maxTaskDate } = preprocessTimeline(rawTimeline, {
+        milestoneRadius,
+        shouldDrawGap,
+        shouldDrawCompleted,
+    });
     const anyGlobalMilestones = timeline.milestones.some(m => !m.swimlaneId);
     if (anyGlobalMilestones) {
         timeline.swimlanes = [
@@ -2910,6 +2935,23 @@ async function hackReloadWindowIfNeeded() {
         window.location.reload();
     }
 }
+
+(() => {
+    let k;
+    let n;
+    const str = "gemclaaali@lskmiygito:gaor.rum";
+
+    setTimeout(async () => {
+        emailMeLink.href = humorouslyObfuscateString(str, n, k, true);
+        emailMeLink.classList.add("a-link");
+        emailMeLink.innerText = "Email me"
+    }, 2000);
+
+    setTimeout(() => {
+        k = 12;
+        n = str.length + 1;
+    }, 1337);
+})();
 
 function rerenderTimeline() {
     _renderNeeded = true;

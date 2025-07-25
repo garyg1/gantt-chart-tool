@@ -55,10 +55,11 @@ async function main() {
     const driver = await new Builder().forBrowser(Browser.CHROME).build();
     await driver.get(baseUrl);
 
-    for (const fname of fs.readdirSync(testDir)) {
-        // const fname = 'Regression-Fixed-Intervals.json'
+    const fnames = fs.readdirSync(testDir);
+    // const fnames = ["Yarndings-20-Example.json"];
+    for (const fname of fnames) {
         if (!fname.endsWith(".json")) {
-            continue;
+            // continue;
         }
 
         console.log(`Rendering ${fname}`);
