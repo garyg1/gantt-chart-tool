@@ -1,0 +1,26 @@
+{
+    "title": "Project A",
+    "config": {
+        "width": 700,
+        "font": "sans-serif",
+        "palette": {
+            "gradient": ["#3c5ca2", "seagreen", "#eee"],
+            "backgroundColor": "white"
+        },
+        "showDeps": false,
+        "showCriticalPaths": false
+    },
+    "swimlanes": [
+        { "id": "1", "name": "A", "maxParallelism": 3 },
+        { "id": "2", "name": "B", "maxParallelism": 2 }
+    ],
+    "milestones": [
+    ],
+    "tasks": [
+        {
+            "name": "Fixed Task A",
+            "swimlaneId": "1",
+            "interval": { "start": "2025-08-13", "end": "2025-08-13" }
+        }
+    ]
+}

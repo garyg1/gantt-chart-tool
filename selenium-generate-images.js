@@ -56,6 +56,7 @@ async function main() {
     await driver.get(baseUrl);
 
     for (const fname of fs.readdirSync(testDir)) {
+        // const fname = 'Regression-Fixed-Intervals.json'
         if (!fname.endsWith(".json")) {
             continue;
         }

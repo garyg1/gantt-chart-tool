@@ -2383,6 +2383,20 @@ function toEnUsOrd(ord) {
 }
 
 /**
+ * @param {object} d
+ * @param {string[]} path
+ */
+function getNested(d, path) {
+    for (const p of path) {
+        if (!d) {
+            return d;
+        }
+        d = d[p];
+    }
+    return d;
+}
+
+/**
  * @param {typeof _timeline} timeline
  * @returns {typeof _timeline}
  */
@@ -2402,7 +2416,15 @@ function validateTimeline(timeline) {
         {
             label: "task",
             data: timeline.tasks || [],
-            props: [{ prop: "name", unique: true, index: taskNames }],
+            props: [
+                { prop: "name", unique: true, index: taskNames },
+                {
+                    prop1: "interval.start",
+                    prop2: "interval.end",
+                    check: (p1, p2) => p1 <= p2,
+                    opName: "before",
+                },
+            ],
             keys: ["name"],
         },
         {
@@ -2424,15 +2446,18 @@ function validateTimeline(timeline) {
 
     for (const { label, data, props, keys } of propsToStringCheck) {
         let ord = 1;
-        for (const { prop, unique, index, mutex } of props) {
+        for (const { prop, unique, index, mutex, prop1, prop2, check, opName } of props) {
             for (const entry of data) {
+                const name =
+                    keys.map(key => getNested(entry, key.split("."))).find(x => x) ||
+                    `<no '${key}'>`;
                 if (prop) {
-                    if (!entry || !entry[prop]) {
+                    const value = getNested(entry, prop.split("."));
+                    if (!value) {
                         errors.push(
                             `The ${toEnUsOrd(ord)} ${label} is missing a "${prop}" property.`,
                         );
                     }
-                    const value = entry[prop];
                     if (unique && index && index[value]) {
                         errors.push(`Multiple ${label}s cannot have ${prop} '${value}'.`);
                     }
@@ -2440,8 +2465,8 @@ function validateTimeline(timeline) {
                         index[value] = entry;
                     }
                 }
+
                 if (mutex) {
-                    const name = keys.map(key => entry[key]).find(x => x) || `<no '${key}'>`;
                     const numPresent = mutex.filter(k => entry.hasOwnProperty(k)).length;
                     if (numPresent > 1) {
                         errors.push(
@@ -2449,6 +2474,16 @@ function validateTimeline(timeline) {
                         );
                     }
                 }
+
+                if (prop1 && prop2 && check) {
+                    const value1 = getNested(entry, prop1.split("."));
+                    const value2 = getNested(entry, prop2.split("."));
+
+                    if (value1 && value2 && !check(value1, value2)) {
+                        errors.push(`The ${label} '${name}' must have ${prop1} ${opName} ${prop2}`);
+                    }
+                }
+
                 ord++;
             }
         }
@@ -2563,7 +2598,16 @@ async function scheduleTasks(timeline, onSolvingStart) {
     }
 
     if (timeline.tasks.every(t => t.interval)) {
-        return timeline;
+        return {
+            ...timeline,
+            tasks: timeline.tasks.map(task => ({
+                ...task,
+                interval: {
+                    ...task.interval,
+                    end: dateToIso(addDays(task.interval.end, 1)),
+                },
+            })),
+        };
     }
 
     const baseDate = parseDateOrDefault(
@@ -2579,9 +2623,9 @@ async function scheduleTasks(timeline, onSolvingStart) {
             ...t,
             durationDays: t.duration
                 ? parseDuration(t.duration)
-                : getDuration(t.interval.start, t.interval.end),
+                : getDuration(t.interval.start, t.interval.end) + 1,
             fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
-            fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
+            fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) + 1 : null,
             globalIndex: i,
         }));
 
