@@ -1297,15 +1297,7 @@ function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
     }
 }
 
-/**
- * @param {Timeline} rawTimeline
- * @returns {SVGElement}
- */
-function renderTimeline(rawTimeline) {
-    assertTimelineValid(rawTimeline);
-
-    const shouldDrawGap = rawTimeline.config?.showDeps || rawTimeline.config?.showCriticalPaths;
-    const shouldDrawCompleted = parseBoolOrDefault(rawTimeline.config?.showCompletedTasks, true);
+function preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawCompleted, shouldDrawGap}) {
     const parsedTasks = rawTimeline.tasks
         .map(t => ({
             ...t,
@@ -1325,6 +1317,7 @@ function renderTimeline(rawTimeline) {
             }
             return a.interval.end.getTime() - b.interval.end.getTime();
         });
+
     const tasksToShow = parsedTasks
         .filter(t =>
             (rawTimeline.swimlanes || [])
@@ -1366,12 +1359,10 @@ function renderTimeline(rawTimeline) {
             rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)),
         )
         .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
-    if (minTaskDate > maxTaskDate) {
+    
+        if (minTaskDate > maxTaskDate) {
         maxTaskDate = addDays(minTaskDate, 1);
     }
-
-    const taskHeight = parseNumberOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
-    const milestoneRadius = taskHeight / 2;
 
     const scheduledMilestones = rawMilestones
         .filter(milestone => milestone.hidden !== true)
@@ -1381,6 +1372,7 @@ function renderTimeline(rawTimeline) {
             _type: "milestone",
         }))
         .map(m => {
+            // TODO: move this logic to the scheduler
             const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
             const taskDeps = m.deps
                 .map(depName => parsedTasks.find(t => t.name === depName))
@@ -1394,6 +1386,7 @@ function renderTimeline(rawTimeline) {
                 .map(t => t.interval.end)
                 .reduce((max, end) => (end > max ? end : max), minTaskDate);
             const completed = deps.length > 0 && deps.every(d => d.completed);
+
             return {
                 ...m,
                 interval: {
@@ -1421,6 +1414,22 @@ function renderTimeline(rawTimeline) {
         milestones: scheduledMilestones,
         config: rawTimeline.config || {},
     };
+    return { timeline, minTaskDate, maxTaskDate };
+}
+
+/**
+ * @param {Timeline} rawTimeline
+ * @returns {SVGElement}
+ */
+function renderTimeline(rawTimeline) {
+    assertTimelineValid(rawTimeline);
+
+    const taskHeight = parseNumberOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
+    const shouldDrawGap = rawTimeline.config?.showDeps || rawTimeline.config?.showCriticalPaths;
+    const shouldDrawCompleted = parseBoolOrDefault(rawTimeline.config?.showCompletedTasks, true);
+    const milestoneRadius = taskHeight / 2;
+
+    const { timeline, minTaskDate, maxTaskDate } = preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawGap, shouldDrawCompleted });
     const anyGlobalMilestones = timeline.milestones.some(m => !m.swimlaneId);
     if (anyGlobalMilestones) {
         timeline.swimlanes = [
