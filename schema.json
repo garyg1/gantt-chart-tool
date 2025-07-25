@@ -22,6 +22,10 @@
                     "type": "boolean",
                     "description": "Whether to render 'special' lines between tasks on critical paths (see Wikipedia for an explanation)."
                 },
+                "showCompletedTasks": {
+                    "type": "boolean",
+                    "description": "Whether to show completed tasks. If false will hide them from view."
+                },
                 "width": {
                     "type": "number",
                     "description": "Width (pixels) of the rendered chart."

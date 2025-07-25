@@ -354,6 +354,7 @@ function makeSampleTimeline() {
             },
             showDeps: false,
             showCriticalPaths: false,
+            showCompletedTasks: true,
             dateLabels: true,
             padding: {
                 tasks: DEFAULT_PADDING_TASKS,
@@ -393,6 +394,7 @@ function makeSampleTimeline() {
 
     // remove from user examples, but keep type hints
     delete timeline.config.palette.outlines;
+    delete timeline.config.showCompletedTasks;
     delete timeline.config.padding;
     delete timeline.config.fontSizes;
     delete timeline.config.dateLabels;
@@ -1303,12 +1305,8 @@ function renderTimeline(rawTimeline) {
     assertTimelineValid(rawTimeline);
 
     const shouldDrawGap = rawTimeline.config?.showDeps || rawTimeline.config?.showCriticalPaths;
-    const scheduledTasks = rawTimeline.tasks
-        .filter(t =>
-            (rawTimeline.swimlanes || [])
-                .filter(s => s.id === t.swimlaneId)
-                .some(s => s.hidden !== true),
-        )
+    const shouldDrawCompleted = parseBoolOrDefault(rawTimeline.config?.showCompletedTasks, true);
+    const parsedTasks = rawTimeline.tasks
         .map(t => ({
             ...t,
             interval: {
@@ -1327,6 +1325,34 @@ function renderTimeline(rawTimeline) {
             }
             return a.interval.end.getTime() - b.interval.end.getTime();
         });
+    const tasksToShow = parsedTasks
+        .filter(t =>
+            (rawTimeline.swimlanes || [])
+                .filter(s => s.id === t.swimlaneId)
+                .some(s => s.hidden !== true),
+        )
+        .filter(t => shouldDrawCompleted || !t.completed);
+
+    const swimlanesToShow = (rawTimeline.swimlanes || [])
+        .filter(swimlane => swimlane.hidden !== true)
+        .filter(
+            swimlane =>
+                tasksToShow.some(task => task.swimlaneId === swimlane.id) ||
+                rawTimeline.milestones.some(milestone => milestone.swimlaneId === swimlane.id),
+        );
+
+    const swimlanesWithTasks = (rawTimeline.swimlanes || [])
+        .filter(swimlane => swimlane.hidden !== true)
+        .filter(swimlane => tasksToShow.some(task => task.swimlaneId === swimlane.id));
+
+    const shouldShowDep = d =>
+        tasksToShow.find(t1 => t1.name === d) || swimlanesWithTasks.find(s1 => s1.id === d);
+
+    const scheduledTasks = tasksToShow.map(t => ({
+        ...t,
+        deps: (t.deps || []).filter(d => shouldShowDep(d)),
+    }));
+
     const rawMilestones = rawTimeline.milestones || [];
     const minTaskDate = scheduledTasks
         .map(task => task.interval.start)
@@ -1347,49 +1373,52 @@ function renderTimeline(rawTimeline) {
     const taskHeight = parseNumberOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
     const milestoneRadius = taskHeight / 2;
 
+    const scheduledMilestones = rawMilestones
+        .filter(milestone => milestone.hidden !== true)
+        .map(m => ({
+            ...m,
+            deps: m.deps || [],
+            _type: "milestone",
+        }))
+        .map(m => {
+            const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
+            const taskDeps = m.deps
+                .map(depName => parsedTasks.find(t => t.name === depName))
+                .filter(t => !!t);
+            const swimlaneDeps = m.deps
+                .map(depName => rawTimeline.swimlanes.find(s => s.id === depName))
+                .filter(s => !!s)
+                .flatMap(s => parsedTasks.filter(t => t.swimlaneId === s.id));
+            const deps = taskDeps.concat(swimlaneDeps);
+            const milestoneTime = deps
+                .map(t => t.interval.end)
+                .reduce((max, end) => (end > max ? end : max), minTaskDate);
+            const completed = deps.length > 0 && deps.every(d => d.completed);
+            return {
+                ...m,
+                interval: {
+                    start: exactly ?? milestoneTime,
+                    end: exactly ?? milestoneTime,
+                    drawnStart: exactly ?? milestoneTime,
+                    drawnEnd: exactly ?? milestoneTime,
+                },
+                offset: {
+                    start: milestoneRadius - 1,
+                    // 1 to fix optical illusion involving line drawn into a circle's center.
+                    // Where it is also occluded by the circle.
+                    center: 1,
+                    end: milestoneRadius - 1,
+                },
+                completed: m.completed ?? completed,
+                deps: m.deps.filter(d => shouldShowDep(d)),
+            };
+        });
+
     const timeline = {
         ...rawTimeline,
         tasks: scheduledTasks,
-        swimlanes: (rawTimeline.swimlanes || []).filter(swimlane => swimlane.hidden !== true),
-        milestones: (rawTimeline.milestones || [])
-            .filter(milestone => milestone.hidden !== true)
-            .map(m => ({
-                ...m,
-                deps: m.deps || [],
-                _type: "milestone",
-            }))
-            .map(m => {
-                const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
-                const taskDeps = m.deps
-                    .map(depName => scheduledTasks.find(t => t.name === depName))
-                    .filter(t => !!t);
-                const swimlaneDeps = m.deps
-                    .map(depName => rawTimeline.swimlanes.find(s => s.id === depName))
-                    .filter(s => !!s)
-                    .flatMap(s => scheduledTasks.filter(t => t.swimlaneId === s.id));
-                const deps = taskDeps.concat(swimlaneDeps);
-                const milestoneTime = deps
-                    .map(t => t.interval.end)
-                    .reduce((max, end) => (end > max ? end : max), minTaskDate);
-                const completed = deps.length > 0 && deps.every(d => d.completed);
-                return {
-                    ...m,
-                    interval: {
-                        start: exactly ?? milestoneTime,
-                        end: exactly ?? milestoneTime,
-                        drawnStart: exactly ?? milestoneTime,
-                        drawnEnd: exactly ?? milestoneTime,
-                    },
-                    offset: {
-                        start: milestoneRadius - 1,
-                        // 1 to fix optical illusion involving line drawn into a circle's center.
-                        // Where it is also occluded by the circle.
-                        center: 1,
-                        end: milestoneRadius - 1,
-                    },
-                    completed: m.completed ?? completed,
-                };
-            }),
+        swimlanes: swimlanesToShow,
+        milestones: scheduledMilestones,
         config: rawTimeline.config || {},
     };
     const anyGlobalMilestones = timeline.milestones.some(m => !m.swimlaneId);
@@ -1804,7 +1833,9 @@ function renderTimeline(rawTimeline) {
             } else if (swimlane) {
                 const swimlaneTask = allTasks
                     .filter(t => t.swimlaneId === swimlane.id)
-                    .reduce((max, task) => (max.interval.end > task.interval.end ? max : task));
+                    .reduce((max, task) =>
+                        max != null && max.interval.end > task.interval.end ? max : task,
+                    );
                 deps.push([swimlaneTask, taskOrMilestone]);
             } else {
                 log("Can't find dependency?", taskOrMilestone, allTasks);
