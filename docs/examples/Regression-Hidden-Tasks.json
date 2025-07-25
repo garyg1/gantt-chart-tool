@@ -1,0 +1,52 @@
+{
+    "title": "Project A",
+    "config": {
+        "width": 700,
+        "font": "sans-serif",
+        "palette": {
+            "gradient": ["#3c5ca2", "seagreen", "#eee"],
+            "backgroundColor": "white"
+        },
+        "showCompletedTasks": false,
+        "showDeps": true
+    },
+    "swimlanes": [
+        { "id": "1", "name": "A", "maxParallelism": 3 },
+        { "id": "2", "name": "B", "maxParallelism": 2 },
+        { "id": "3", "name": "C", "maxParallelism": 2 }
+    ],
+    "milestones": [
+        {
+            "name": "Milestone 1",
+            "swimlaneId": "2",
+            "deps": ["1"]
+        },
+        {
+            "name": "Milestone 2",
+            "swimlaneId": "1",
+            "deps": ["2"]
+        }
+    ],
+    "tasks": [
+        { "name": "Task 1", "duration": "P1D", "swimlaneId": "1" },
+        {
+            "name": "Task 2",
+            "duration": "P1D",
+            "swimlaneId": "1",
+            "deps": ["2", "Task 4", "Task 5"]
+        },
+        {
+            "name": "Task 3",
+            "duration": "P1D",
+            "swimlaneId": "2",
+            "completed": true
+        },
+        {
+            "name": "Task 4",
+            "duration": "P1D",
+            "swimlaneId": "3",
+            "completed": true
+        },
+        { "name": "Task 5", "duration": "P1D", "swimlaneId": "3" }
+    ]
+}

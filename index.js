@@ -39,7 +39,8 @@ const statusField = document.getElementById("status-field");
 const localStorageCheckbox = document.getElementById("localstorage-checkbox");
 const localStorageCheckboxLabel = document.getElementById("localstorage-checkbox-label");
 const localStorageCheckboxClickArea = document.getElementById("localstorage-checkbox-clickarea");
-
+/** @type {HTMLLinkElement} */
+const emailMeLink = document.getElementById("email-me-link");
 const TIMELINE_LOCAL_STORAGE_KEY = "_garygurlaskie_com_timelines";
 const GFONT_LOCAL_STORAGE_KEY = "_garygurlaskie_com_gfont";
 const DEFAULT_WIDTH = 800;
@@ -166,6 +167,26 @@ const isLocalStorageEnabled = setupFourStateToggle(
 
 function stringifyJson(object) {
     return prettifyJson(object, 4, 75);
+}
+
+function humorouslyObfuscateString(str, n, k, invert) {
+    function mod(x, n) {
+        return ((x % n) + n) % n;
+    }
+
+    const out = [...Array(n)];
+    const start = mod(k, n);
+    let e = start;
+    let idx = 0;
+    do {
+        if (invert) {
+            out[e - 1] = str[idx++];
+        } else {
+            out[idx++] = str[e - 1];
+        }
+        e = mod(e * k, n);
+    } while (e != start);
+    return out.join("");
 }
 
 /**
@@ -354,6 +375,7 @@ function makeSampleTimeline() {
             },
             showDeps: false,
             showCriticalPaths: false,
+            showCompletedTasks: true,
             dateLabels: true,
             padding: {
                 tasks: DEFAULT_PADDING_TASKS,
@@ -393,6 +415,7 @@ function makeSampleTimeline() {
 
     // remove from user examples, but keep type hints
     delete timeline.config.palette.outlines;
+    delete timeline.config.showCompletedTasks;
     delete timeline.config.padding;
     delete timeline.config.fontSizes;
     delete timeline.config.dateLabels;
@@ -1295,20 +1318,8 @@ function cullOverlappingTickLabels(xAxisTicks, font, minAxisPadding) {
     }
 }
 
-/**
- * @param {Timeline} rawTimeline
- * @returns {SVGElement}
- */
-function renderTimeline(rawTimeline) {
-    assertTimelineValid(rawTimeline);
-
-    const shouldDrawGap = rawTimeline.config?.showDeps || rawTimeline.config?.showCriticalPaths;
-    const scheduledTasks = rawTimeline.tasks
-        .filter(t =>
-            (rawTimeline.swimlanes || [])
-                .filter(s => s.id === t.swimlaneId)
-                .some(s => s.hidden !== true),
-        )
+function preprocessTimeline(rawTimeline, { milestoneRadius, shouldDrawCompleted, shouldDrawGap }) {
+    const parsedTasks = rawTimeline.tasks
         .map(t => ({
             ...t,
             interval: {
@@ -1327,6 +1338,35 @@ function renderTimeline(rawTimeline) {
             }
             return a.interval.end.getTime() - b.interval.end.getTime();
         });
+
+    const tasksToShow = parsedTasks
+        .filter(t =>
+            (rawTimeline.swimlanes || [])
+                .filter(s => s.id === t.swimlaneId)
+                .some(s => s.hidden !== true),
+        )
+        .filter(t => shouldDrawCompleted || !t.completed);
+
+    const swimlanesToShow = (rawTimeline.swimlanes || [])
+        .filter(swimlane => swimlane.hidden !== true)
+        .filter(
+            swimlane =>
+                tasksToShow.some(task => task.swimlaneId === swimlane.id) ||
+                rawTimeline.milestones.some(milestone => milestone.swimlaneId === swimlane.id),
+        );
+
+    const swimlanesWithTasks = (rawTimeline.swimlanes || [])
+        .filter(swimlane => swimlane.hidden !== true)
+        .filter(swimlane => tasksToShow.some(task => task.swimlaneId === swimlane.id));
+
+    const shouldShowDep = d =>
+        tasksToShow.find(t1 => t1.name === d) || swimlanesWithTasks.find(s1 => s1.id === d);
+
+    const scheduledTasks = tasksToShow.map(t => ({
+        ...t,
+        deps: (t.deps || []).filter(d => shouldShowDep(d)),
+    }));
+
     const rawMilestones = rawTimeline.milestones || [];
     const minTaskDate = scheduledTasks
         .map(task => task.interval.start)
@@ -1340,58 +1380,81 @@ function renderTimeline(rawTimeline) {
             rawMilestones.filter(m => m.interval?.exactly).map(m => new Date(m.interval.exactly)),
         )
         .reduce((max, curr) => (!max || curr > max ? curr : max), JS_MIN_DATE);
+
     if (minTaskDate > maxTaskDate) {
         maxTaskDate = addDays(minTaskDate, 1);
     }
 
-    const taskHeight = parseNumberOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
-    const milestoneRadius = taskHeight / 2;
+    const scheduledMilestones = rawMilestones
+        .filter(milestone => milestone.hidden !== true)
+        .map(m => ({
+            ...m,
+            deps: m.deps || [],
+            _type: "milestone",
+        }))
+        .map(m => {
+            // TODO: move this logic to the scheduler
+            const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
+            const taskDeps = m.deps
+                .map(depName => parsedTasks.find(t => t.name === depName))
+                .filter(t => !!t);
+            const swimlaneDeps = m.deps
+                .map(depName => rawTimeline.swimlanes.find(s => s.id === depName))
+                .filter(s => !!s)
+                .flatMap(s => parsedTasks.filter(t => t.swimlaneId === s.id));
+            const deps = taskDeps.concat(swimlaneDeps);
+            const milestoneTime = deps
+                .map(t => t.interval.end)
+                .reduce((max, end) => (end > max ? end : max), minTaskDate);
+            const completed = deps.length > 0 && deps.every(d => d.completed);
+
+            return {
+                ...m,
+                interval: {
+                    start: exactly ?? milestoneTime,
+                    end: exactly ?? milestoneTime,
+                    drawnStart: exactly ?? milestoneTime,
+                    drawnEnd: exactly ?? milestoneTime,
+                },
+                offset: {
+                    start: milestoneRadius - 1,
+                    // 1 to fix optical illusion involving line drawn into a circle's center.
+                    // Where it is also occluded by the circle.
+                    center: 1,
+                    end: milestoneRadius - 1,
+                },
+                completed: m.completed ?? completed,
+                deps: m.deps.filter(d => shouldShowDep(d)),
+            };
+        });
 
     const timeline = {
         ...rawTimeline,
         tasks: scheduledTasks,
-        swimlanes: (rawTimeline.swimlanes || []).filter(swimlane => swimlane.hidden !== true),
-        milestones: (rawTimeline.milestones || [])
-            .filter(milestone => milestone.hidden !== true)
-            .map(m => ({
-                ...m,
-                deps: m.deps || [],
-                _type: "milestone",
-            }))
-            .map(m => {
-                const exactly = m.interval?.exactly ? new Date(m.interval?.exactly) : null;
-                const taskDeps = m.deps
-                    .map(depName => scheduledTasks.find(t => t.name === depName))
-                    .filter(t => !!t);
-                const swimlaneDeps = m.deps
-                    .map(depName => rawTimeline.swimlanes.find(s => s.id === depName))
-                    .filter(s => !!s)
-                    .flatMap(s => scheduledTasks.filter(t => t.swimlaneId === s.id));
-                const deps = taskDeps.concat(swimlaneDeps);
-                const milestoneTime = deps
-                    .map(t => t.interval.end)
-                    .reduce((max, end) => (end > max ? end : max), minTaskDate);
-                const completed = deps.length > 0 && deps.every(d => d.completed);
-                return {
-                    ...m,
-                    interval: {
-                        start: exactly ?? milestoneTime,
-                        end: exactly ?? milestoneTime,
-                        drawnStart: exactly ?? milestoneTime,
-                        drawnEnd: exactly ?? milestoneTime,
-                    },
-                    offset: {
-                        start: milestoneRadius - 1,
-                        // 1 to fix optical illusion involving line drawn into a circle's center.
-                        // Where it is also occluded by the circle.
-                        center: 1,
-                        end: milestoneRadius - 1,
-                    },
-                    completed: m.completed ?? completed,
-                };
-            }),
+        swimlanes: swimlanesToShow,
+        milestones: scheduledMilestones,
         config: rawTimeline.config || {},
     };
+    return { timeline, minTaskDate, maxTaskDate };
+}
+
+/**
+ * @param {Timeline} rawTimeline
+ * @returns {SVGElement}
+ */
+function renderTimeline(rawTimeline) {
+    assertTimelineValid(rawTimeline);
+
+    const taskHeight = parseNumberOrDefault(rawTimeline.config?.padding?.taskHeight, 15);
+    const shouldDrawGap = rawTimeline.config?.showDeps || rawTimeline.config?.showCriticalPaths;
+    const shouldDrawCompleted = parseBoolOrDefault(rawTimeline.config?.showCompletedTasks, true);
+    const milestoneRadius = taskHeight / 2;
+
+    const { timeline, minTaskDate, maxTaskDate } = preprocessTimeline(rawTimeline, {
+        milestoneRadius,
+        shouldDrawGap,
+        shouldDrawCompleted,
+    });
     const anyGlobalMilestones = timeline.milestones.some(m => !m.swimlaneId);
     if (anyGlobalMilestones) {
         timeline.swimlanes = [
@@ -1804,7 +1867,9 @@ function renderTimeline(rawTimeline) {
             } else if (swimlane) {
                 const swimlaneTask = allTasks
                     .filter(t => t.swimlaneId === swimlane.id)
-                    .reduce((max, task) => (max.interval.end > task.interval.end ? max : task));
+                    .reduce((max, task) =>
+                        max != null && max.interval.end > task.interval.end ? max : task,
+                    );
                 deps.push([swimlaneTask, taskOrMilestone]);
             } else {
                 log("Can't find dependency?", taskOrMilestone, allTasks);
@@ -2383,6 +2448,20 @@ function toEnUsOrd(ord) {
 }
 
 /**
+ * @param {object} d
+ * @param {string[]} path
+ */
+function getNested(d, path) {
+    for (const p of path) {
+        if (!d) {
+            return d;
+        }
+        d = d[p];
+    }
+    return d;
+}
+
+/**
  * @param {typeof _timeline} timeline
  * @returns {typeof _timeline}
  */
@@ -2402,7 +2481,15 @@ function validateTimeline(timeline) {
         {
             label: "task",
             data: timeline.tasks || [],
-            props: [{ prop: "name", unique: true, index: taskNames }],
+            props: [
+                { prop: "name", unique: true, index: taskNames },
+                {
+                    prop1: "interval.start",
+                    prop2: "interval.end",
+                    check: (p1, p2) => p1 <= p2,
+                    opName: "before",
+                },
+            ],
             keys: ["name"],
         },
         {
@@ -2424,15 +2511,18 @@ function validateTimeline(timeline) {
 
     for (const { label, data, props, keys } of propsToStringCheck) {
         let ord = 1;
-        for (const { prop, unique, index, mutex } of props) {
+        for (const { prop, unique, index, mutex, prop1, prop2, check, opName } of props) {
             for (const entry of data) {
+                const name =
+                    keys.map(key => getNested(entry, key.split("."))).find(x => x) ||
+                    `<no '${key}'>`;
                 if (prop) {
-                    if (!entry || !entry[prop]) {
+                    const value = getNested(entry, prop.split("."));
+                    if (!value) {
                         errors.push(
                             `The ${toEnUsOrd(ord)} ${label} is missing a "${prop}" property.`,
                         );
                     }
-                    const value = entry[prop];
                     if (unique && index && index[value]) {
                         errors.push(`Multiple ${label}s cannot have ${prop} '${value}'.`);
                     }
@@ -2440,8 +2530,8 @@ function validateTimeline(timeline) {
                         index[value] = entry;
                     }
                 }
+
                 if (mutex) {
-                    const name = keys.map(key => entry[key]).find(x => x) || `<no '${key}'>`;
                     const numPresent = mutex.filter(k => entry.hasOwnProperty(k)).length;
                     if (numPresent > 1) {
                         errors.push(
@@ -2449,6 +2539,16 @@ function validateTimeline(timeline) {
                         );
                     }
                 }
+
+                if (prop1 && prop2 && check) {
+                    const value1 = getNested(entry, prop1.split("."));
+                    const value2 = getNested(entry, prop2.split("."));
+
+                    if (value1 && value2 && !check(value1, value2)) {
+                        errors.push(`The ${label} '${name}' must have ${prop1} ${opName} ${prop2}`);
+                    }
+                }
+
                 ord++;
             }
         }
@@ -2563,7 +2663,16 @@ async function scheduleTasks(timeline, onSolvingStart) {
     }
 
     if (timeline.tasks.every(t => t.interval)) {
-        return timeline;
+        return {
+            ...timeline,
+            tasks: timeline.tasks.map(task => ({
+                ...task,
+                interval: {
+                    ...task.interval,
+                    end: dateToIso(addDays(task.interval.end, 1)),
+                },
+            })),
+        };
     }
 
     const baseDate = parseDateOrDefault(
@@ -2579,9 +2688,9 @@ async function scheduleTasks(timeline, onSolvingStart) {
             ...t,
             durationDays: t.duration
                 ? parseDuration(t.duration)
-                : getDuration(t.interval.start, t.interval.end),
+                : getDuration(t.interval.start, t.interval.end) + 1,
             fixedStartDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.start)) : null,
-            fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) : null,
+            fixedEndDateDays: t.interval ? diffDays(baseDate, new Date(t.interval.end)) + 1 : null,
             globalIndex: i,
         }));
 
@@ -2826,6 +2935,23 @@ async function hackReloadWindowIfNeeded() {
         window.location.reload();
     }
 }
+
+(() => {
+    let k;
+    let n;
+    const str = "gemclaaali@lskmiygito:gaor.rum";
+
+    setTimeout(async () => {
+        emailMeLink.href = humorouslyObfuscateString(str, n, k, true);
+        emailMeLink.classList.add("a-link");
+        emailMeLink.innerText = "Email me"
+    }, 2000);
+
+    setTimeout(() => {
+        k = 12;
+        n = str.length + 1;
+    }, 1337);
+})();
 
 function rerenderTimeline() {
     _renderNeeded = true;
