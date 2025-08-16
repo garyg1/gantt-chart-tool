@@ -169,7 +169,7 @@ function stringifyJson(object) {
     return prettifyJson(object, 4, 75);
 }
 
-function humorouslyObfuscateString(str, n, k, invert) {
+function deobfuscateEmailAddress(str, n, k, invert) {
     function mod(x, n) {
         return ((x % n) + n) % n;
     }
@@ -2937,20 +2937,22 @@ async function hackReloadWindowIfNeeded() {
 }
 
 (() => {
-    let k;
-    let n;
-    const str = "gemclaaali@lskmiygito:gaor.rum";
+    let k = 0;
+    let n = 0;
 
     setTimeout(async () => {
-        emailMeLink.href = humorouslyObfuscateString(str, n, k, true);
-        emailMeLink.classList.add("a-link");
-        emailMeLink.innerText = "Email me"
+        const emailAddress = deobfuscateEmailAddress("gemclaaali@lskmiygito:gaor.rum", n, k, true);
+        if (emailAddress.startsWith("mailto:")) {
+            emailMeLink.href = emailAddress;
+            emailMeLink.classList.add("a-link");
+            emailMeLink.innerText = "Email me";
+        }
     }, 2000);
 
     setTimeout(() => {
         k = 12;
-        n = str.length + 1;
-    }, 1337);
+        n = 31;
+    }, 1500);
 })();
 
 function rerenderTimeline() {
